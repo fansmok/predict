@@ -153,19 +153,34 @@ export function PlayerPickerSheet({
   const teamSections = useMemo(() => {
     const q = search.trim().toLowerCase();
     const filtered = q ? teams.filter(t => t.name.toLowerCase().includes(q)) : teams;
+
+    const isSectionExhausted = (groupId: FifaGroupId, sectionTeams: TeamOption[]) => {
+      const max = maxPerGroup[groupId] ?? 3;
+      if ((groupCounts[groupId] ?? 0) >= max) return true;
+      return sectionTeams.length > 0 && sectionTeams.every(t => !t.available);
+    };
+
+    const sortTeams = (a: TeamOption, b: TeamOption) => {
+      const aBlocked = !a.available || a.atTeamLimit || a.atGroupLimit;
+      const bBlocked = !b.available || b.atTeamLimit || b.atGroupLimit;
+      if (aBlocked !== bBlocked) return aBlocked ? 1 : -1;
+      return a.name.localeCompare(b.name, 'ru');
+    };
+
     return ([1, 2, 3, 4] as FifaGroupId[])
       .map(groupId => ({
         groupId,
         label: GROUP_SHORT[groupId],
-        teams: filtered
-          .filter(t => t.fifaGroup === groupId)
-          .sort((a, b) => {
-            if (a.available !== b.available) return a.available ? -1 : 1;
-            return a.name.localeCompare(b.name, 'ru');
-          }),
+        teams: filtered.filter(t => t.fifaGroup === groupId).sort(sortTeams),
       }))
-      .filter(s => s.teams.length > 0);
-  }, [teams, search]);
+      .filter(s => s.teams.length > 0)
+      .sort((a, b) => {
+        const aEx = isSectionExhausted(a.groupId, a.teams);
+        const bEx = isSectionExhausted(b.groupId, b.teams);
+        if (aEx !== bEx) return aEx ? 1 : -1;
+        return a.groupId - b.groupId;
+      });
+  }, [teams, search, groupCounts, maxPerGroup]);
 
   const selectedTeam = teams.find(t => t.id === selectedTeamId);
 

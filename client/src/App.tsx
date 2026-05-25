@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, startTransition } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, startTransition } from 'react';
 import { api } from './api';
 import { Match, User, UserStats, Leader, Rule, Tab, TournamentData, TournamentOption, SquadData, SquadPlayerOption, LeagueSummary } from './types';
 import { BottomNav } from './components/BottomNav';
@@ -70,6 +70,7 @@ export default function App() {
   const [showCreateLeague, setShowCreateLeague] = useState(false);
   const [leagueToOpenId, setLeagueToOpenId] = useState<number | null>(null);
   const [leaderboardResetKey, setLeaderboardResetKey] = useState(0);
+  const contentRef = useRef<HTMLElement>(null);
   /** Вкладки, уже отрисованные хотя бы раз — не размонтируем при переключении. */
   const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set(['matches']));
 
@@ -171,6 +172,19 @@ export default function App() {
       return next;
     });
   }, [tab]);
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [tab]);
+
+  const handleTabChange = useCallback((next: Tab) => {
+    setShowRules(false);
+    contentRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    if (next === 'leaderboard') {
+      setLeaderboardResetKey(k => k + 1);
+    }
+    startTransition(() => setTab(next));
+  }, []);
 
   useEffect(() => {
     if (showAdmin && user && !user.isAdmin) setShowAdmin(false);
@@ -321,6 +335,7 @@ export default function App() {
       {error && <div className="error-banner" role="alert">{error}</div>}
 
       <main
+        ref={contentRef}
         className="content"
         aria-label={showRules ? 'Правила' : showAdmin ? 'Администрирование' : TAB_TITLES[tab]}
       >
@@ -452,13 +467,7 @@ export default function App() {
       {!showAdmin && (
         <BottomNav
           active={tab}
-          onChange={next => {
-            setShowRules(false);
-            if (next === 'leaderboard') {
-              setLeaderboardResetKey(k => k + 1);
-            }
-            startTransition(() => setTab(next));
-          }}
+          onChange={handleTabChange}
           pendingPredictions={pendingPredictions}
         />
       )}

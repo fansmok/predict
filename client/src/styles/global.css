@@ -76,6 +76,19 @@ input {
   font-family: inherit;
 }
 
+/* iOS / Telegram WebView: font-size < 16px вызывает автозум при фокусе */
+input[type="text"],
+input[type="search"],
+input[type="email"],
+input[type="number"],
+textarea,
+.modal-input,
+.friends-search,
+.picker-search,
+.squad-search {
+  font-size: 16px;
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
@@ -5601,7 +5614,7 @@ article.match-card {
   border-radius: 10px;
   padding: 10px 14px;
   color: var(--text);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .squad-filter-row {
@@ -6101,7 +6114,7 @@ article.match-card {
   border-radius: 10px;
   padding: 10px 12px;
   color: var(--text);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .picker-list {
@@ -7169,7 +7182,7 @@ body.picker-open .bottom-nav {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .friends-search-hint {
@@ -7715,7 +7728,7 @@ body.picker-open .bottom-nav {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 16px;
   margin-bottom: 12px;
 }
 
