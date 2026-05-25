@@ -1,22 +1,34 @@
 import { formatMatches, formatPoints, formatPointsWord } from './plural.js';
-import { getBotUsername } from './bot-config.js';
+import { getBotUsername, getWebAppShortName } from './bot-config.js';
 import { buildLeagueStartParam } from './invite-links.js';
 
 const BOT_TOKEN = process.env.BOT_TOKEN ?? '';
 const WEBAPP_URL = process.env.WEBAPP_URL ?? 'http://localhost:5173';
 
+/** URL мини-приложения с start_param (Telegram читает tgWebAppStartParam). */
 export function webAppUrl(startParam?: string): string {
-  return startParam ? `${WEBAPP_URL}?startapp=${startParam}` : WEBAPP_URL;
+  if (!startParam) return WEBAPP_URL;
+  const url = new URL(WEBAPP_URL);
+  url.searchParams.set('tgWebAppStartParam', startParam);
+  return url.toString();
+}
+
+/** Публичная ссылка-приглашение: прямо в Mini App или через /start бота. */
+export function buildTelegramMiniAppLink(startParam: string): string {
+  const bot = getBotUsername();
+  const shortName = getWebAppShortName();
+  if (shortName) {
+    return `https://t.me/${bot}/${shortName}?startapp=${encodeURIComponent(startParam)}`;
+  }
+  return `https://t.me/${bot}?start=${encodeURIComponent(startParam)}`;
 }
 
 export function buildAppInviteLink(referrerId: number): string {
-  const bot = getBotUsername();
-  return `https://t.me/${bot}?start=ref_${referrerId}`;
+  return buildTelegramMiniAppLink(`ref_${referrerId}`);
 }
 
 export function buildLeagueInviteLink(code: string, inviterId?: number): string {
-  const bot = getBotUsername();
-  return `https://t.me/${bot}?start=${buildLeagueStartParam(code, inviterId)}`;
+  return buildTelegramMiniAppLink(buildLeagueStartParam(code, inviterId));
 }
 
 export async function sendTelegramMessage(

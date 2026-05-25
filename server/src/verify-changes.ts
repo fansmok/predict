@@ -9,6 +9,9 @@ import { initDatabase, db } from './db.js';
 import { applyMatchResult, resetMatch } from './admin.js';
 import { registerTelegramUser, getBotUserStats, getBotTodayMatches, getBotTopLeaders } from './bot-api.js';
 import { processStartParamForUser } from './bot-start.js';
+import { applyLeagueInvite, parseLeagueStartParam } from './invite-links.js';
+import { webAppUrl } from './telegram-send.js';
+import { createLeague, joinLeagueByCode } from './leagues.js';
 import { resolveTournamentPickFields } from './tournament.js';
 import { isAdminUser, resetAdminIdsCache } from './admins.js';
 import { parseMatchesGroupFilter, parseLeagueCode, parseUserIdList } from './security.js';
@@ -73,6 +76,37 @@ async function main() {
   processStartParamForUser(testId, `ref_${refId}`);
   const referral = db.prepare('SELECT 1 FROM user_referrals WHERE referrer_id = ? AND referred_id = ?').get(refId, testId);
   assert(!!referral, 'processStartParamForUser should record referral');
+
+  // League invite: inviter id in start_param
+  const inviterId = refId;
+  const inviteeId = testId + 2;
+  cleanupTestUsers(inviteeId);
+  db.prepare('INSERT OR IGNORE INTO users (id, first_name) VALUES (?, ?)').run(inviteeId, 'Invitee');
+
+  const league = createLeague(inviterId, 'Verify League');
+  const startParam = `league_${league.code}_${inviterId}`;
+  assert(parseLeagueStartParam(startParam)?.inviterId === inviterId, 'parseLeagueStartParam inviterId');
+  assert(parseLeagueStartParam(startParam)?.code === league.code, 'parseLeagueStartParam code');
+
+  applyLeagueInvite(inviteeId, startParam);
+  assert(joinLeagueByCode(inviteeId, league.code!).isMember, 'invitee should be league member');
+  const leagueReferral = db.prepare(
+    'SELECT 1 FROM user_referrals WHERE referrer_id = ? AND referred_id = ?'
+  ).get(inviterId, inviteeId);
+  assert(!!leagueReferral, 'league invite should record referral to inviter');
+
+  processStartParamForUser(inviteeId, startParam);
+  const memberCount = db.prepare(
+    'SELECT COUNT(*) as c FROM league_members WHERE league_id = ?'
+  ).get(league.id) as { c: number };
+  assert(memberCount.c >= 2, 'league should have inviter and invitee');
+
+  const appLink = webAppUrl(startParam);
+  assert(appLink.includes('tgWebAppStartParam='), 'webAppUrl must use tgWebAppStartParam');
+
+  db.prepare('DELETE FROM league_members WHERE league_id = ?').run(league.id);
+  db.prepare('DELETE FROM leagues WHERE id = ?').run(league.id);
+  cleanupTestUsers(inviteeId);
 
   // today matches (empty until June 2026 — expected)
   getBotTodayMatches(testId);

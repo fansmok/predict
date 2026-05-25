@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { Bot, InlineKeyboard } from 'grammy';
 
 const token = process.env.BOT_TOKEN;
-const webAppUrl = process.env.WEBAPP_URL ?? 'http://localhost:5173';
+const webAppUrlEnv = process.env.WEBAPP_URL ?? 'http://localhost:5173';
 const serverUrl = process.env.SERVER_URL ?? 'http://127.0.0.1:3001';
 
 if (!token || token === 'your_telegram_bot_token') {
@@ -47,8 +47,15 @@ async function registerUser(
   });
 }
 
+function webAppUrl(startParam?: string): string {
+  if (!startParam) return webAppUrlEnv;
+  const url = new URL(webAppUrlEnv);
+  url.searchParams.set('tgWebAppStartParam', startParam);
+  return url.toString();
+}
+
 function appKeyboard(startParam?: string) {
-  const url = startParam ? `${webAppUrl}?startapp=${startParam}` : webAppUrl;
+  const url = webAppUrl(startParam);
   return new InlineKeyboard().webApp('🏆 Открыть Лигу Прогнозов', url);
 }
 

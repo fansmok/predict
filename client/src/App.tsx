@@ -71,7 +71,6 @@ export default function App() {
   const [leagueToOpenId, setLeagueToOpenId] = useState<number | null>(null);
   const [leaderboardResetKey, setLeaderboardResetKey] = useState(0);
   const contentRef = useRef<HTMLElement>(null);
-  const leagueInviteHandled = useRef(false);
   /** Вкладки, уже отрисованные хотя бы раз — не размонтируем при переключении. */
   const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set(['matches']));
 
@@ -155,30 +154,60 @@ export default function App() {
     loadData();
   }, [loadData]);
 
-  useEffect(() => {
-    if (loading || leagueInviteHandled.current) return;
-    const startParam = getStartParam();
-    const parsed = parseLeagueStartParam(startParam);
-    if (!parsed?.code) return;
-    const code = parsed.code;
+  const leagueInviteStartParam = (() => {
+    const sp = getStartParam();
+    return parseLeagueStartParam(sp) ? sp : '';
+  })();
 
-    leagueInviteHandled.current = true;
-    api
-      .joinLeague(code)
-      .then(res => {
+  useEffect(() => {
+    if (loading || !leagueInviteStartParam) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        await api.bootstrap();
+        const parsed = parseLeagueStartParam(leagueInviteStartParam);
+        if (!parsed?.code || cancelled) return;
+
+        const res = await api.joinLeague(parsed.code);
+        if (cancelled) return;
+
         setLeagueToOpenId(res.league.id);
         setTab('leaderboard');
-        return api.getLeagues();
-      })
+        setMountedTabs(prev => {
+          const next = new Set(prev);
+          next.add('leaderboard');
+          return next;
+        });
+
+        const leaguesRes = await api.getLeagues();
+        if (cancelled) return;
+        setLeagues(leaguesRes.leagues);
+        setCanCreateLeague(leaguesRes.canCreateLeague);
+        setOwnedLeagueCount(leaguesRes.ownedLeagueCount);
+        setMaxOwnedLeagues(leaguesRes.maxOwnedLeagues);
+      } catch {
+        /* join мог уже выполниться через bootstrap или /start бота */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, leagueInviteStartParam]);
+
+  useEffect(() => {
+    if (loading || tab !== 'leaderboard') return;
+    api
+      .getLeagues()
       .then(res => {
-        if (!res) return;
         setLeagues(res.leagues);
         setCanCreateLeague(res.canCreateLeague);
         setOwnedLeagueCount(res.ownedLeagueCount);
         setMaxOwnedLeagues(res.maxOwnedLeagues);
       })
       .catch(() => {});
-  }, [loading]);
+  }, [loading, tab]);
 
   useEffect(() => {
     if (loading) return;
@@ -442,6 +471,7 @@ export default function App() {
               canCreateLeague={canCreateLeague}
               ownedLeagueCount={ownedLeagueCount}
               maxOwnedLeagues={maxOwnedLeagues}
+              isActive={tab === 'leaderboard'}
               onLeaguesChange={async () => {
                 const res = await api.getLeagues();
                 setLeagues(res.leagues);

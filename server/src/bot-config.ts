@@ -7,6 +7,10 @@ export function getBotUsername(): string {
   return resolvedUsername || 'your_bot';
 }
 
+export function getWebAppShortName(): string {
+  return (process.env.WEBAPP_SHORT_NAME ?? '').trim();
+}
+
 /** Подтягивает @username бота из BOT_USERNAME или Telegram getMe. */
 export async function initBotUsername(): Promise<string> {
   if (ENV_USERNAME) {

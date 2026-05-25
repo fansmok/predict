@@ -1,5 +1,6 @@
 import { db } from './db.js';
 import { recordReferral } from './friends.js';
+import { joinLeagueByCode, type LeagueSummary } from './leagues.js';
 
 export function parseLeagueStartParam(startParam: string): { code: string; inviterId?: number } | null {
   if (!startParam.startsWith('league_')) return null;
@@ -49,6 +50,16 @@ export function recordLeagueJoinReferral(
   }
 
   recordReferral(referrerId, memberId);
+}
+
+/** Вступление в лигу по start_param — идемпотентно, можно вызывать повторно. */
+export function applyLeagueInvite(userId: number, startParam: string): LeagueSummary {
+  const parsed = parseLeagueStartParam(startParam);
+  if (!parsed?.code) throw new Error('Некорректная ссылка лиги');
+
+  const league = joinLeagueByCode(userId, parsed.code);
+  recordLeagueJoinReferral(league.id, parsed.inviterId, league.ownerId, userId);
+  return league;
 }
 
 export function markStartParamProcessed(userId: number, startParam: string): void {

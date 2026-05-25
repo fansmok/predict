@@ -44,6 +44,7 @@ interface Props {
   onLeagueOpened?: () => void;
   /** Увеличивается при повторном нажатии «Рейтинг» в нижнем меню — выход на главный экран. */
   leaderboardResetKey?: number;
+  isActive?: boolean;
   onViewUser: (userId: number) => void;
 }
 
@@ -441,6 +442,7 @@ export function LeaderboardPage({
   leagueToOpenId = null,
   onLeagueOpened,
   leaderboardResetKey = 0,
+  isActive = true,
   onViewUser,
 }: Props) {
   const [mode, setMode] = useState<LbMode>('players');
@@ -557,6 +559,11 @@ export function LeaderboardPage({
     setNeighborhood(res.neighborhood ?? []);
     setMyRankDetail(res.myRank);
   }, [leagueDrillId, rankKind]);
+
+  useEffect(() => {
+    if (!isActive || leagueDrillId == null) return;
+    reloadLeagueDrill().catch(() => {});
+  }, [isActive, leagueDrillId, reloadLeagueDrill]);
 
   const handleLeagueCreated = useCallback(
     async (leagueId: number, inviteLink: string) => {
