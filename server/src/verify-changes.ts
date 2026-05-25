@@ -1,0 +1,135 @@
+/**
+ * Post-change verification script — exercises new bot/admin/config flows.
+ * Run: npm run verify --workspace=server
+ */
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { initDatabase, db } from './db.js';
+import { applyMatchResult, resetMatch } from './admin.js';
+import { registerTelegramUser, getBotUserStats, getBotTodayMatches, getBotTopLeaders } from './bot-api.js';
+import { processStartParamForUser } from './bot-start.js';
+import { resolveTournamentPickFields } from './tournament.js';
+import { isAdminUser, resetAdminIdsCache } from './admins.js';
+import { parseMatchesGroupFilter, parseLeagueCode, parseUserIdList } from './security.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
+
+const bugs: string[] = [];
+
+function assert(cond: boolean, msg: string) {
+  if (!cond) bugs.push(msg);
+}
+
+function cleanupTestUsers(...ids: number[]) {
+  if (ids.length === 0) return;
+  const ph = ids.map(() => '?').join(', ');
+  db.prepare(`DELETE FROM notification_log WHERE user_id IN (${ph})`).run(...ids);
+  db.prepare(`DELETE FROM predictions WHERE user_id IN (${ph})`).run(...ids);
+  db.prepare(`DELETE FROM user_referrals WHERE referrer_id IN (${ph}) OR referred_id IN (${ph})`).run(...ids, ...ids);
+  db.prepare(`DELETE FROM friend_invites WHERE inviter_id IN (${ph}) OR invitee_id IN (${ph})`).run(...ids, ...ids);
+  db.prepare(`DELETE FROM users WHERE id IN (${ph})`).run(...ids);
+}
+
+async function main() {
+  initDatabase();
+  console.log('=== Verify post-change flows ===\n');
+
+  // H1: admin allowlist
+  resetAdminIdsCache();
+  process.env.ADMIN_USER_IDS = '999001';
+  assert(isAdminUser(999001), '999001 should be admin when listed in ADMIN_USER_IDS');
+  assert(!isAdminUser(999002), '999002 should not be admin');
+  assert(!isAdminUser(0), 'invalid id should not be admin');
+  assert(parseMatchesGroupFilter('A') === 'A', 'group A should parse');
+  assert(parseMatchesGroupFilter('DROP') === undefined, 'invalid group should be rejected');
+  assert(parseLeagueCode('ABCD1234') === 'ABCD1234', 'league code should parse');
+  assert(parseLeagueCode('bad-code!') === null, 'invalid league code rejected');
+  assert(parseUserIdList([1, 2, 2, -1, 1.5]).length === 2, 'user id list deduped and validated');
+
+  // H2: bot register + stats
+  const testId = 999001;
+  const refId = 999002;
+  cleanupTestUsers(testId, testId + 1, refId);
+  const user = registerTelegramUser({
+    id: testId,
+    first_name: 'VerifyBot',
+    username: 'verifybot',
+  });
+  assert(user.id === testId, `registerTelegramUser id mismatch: ${user.id} !== ${testId}`);
+
+  const statsBefore = getBotUserStats(testId);
+  assert(statsBefore !== null, 'getBotUserStats should find registered user');
+  assert(statsBefore!.totalPoints === 0, 'new user should have 0 points');
+
+  // H4: bootstrap startParam ref
+  registerTelegramUser({ id: refId, first_name: 'Referrer' });
+  db.prepare('INSERT OR IGNORE INTO friend_invites (inviter_id, invitee_id, status) VALUES (?, ?, ?)').run(
+    refId,
+    testId,
+    'pending'
+  );
+  processStartParamForUser(testId, `ref_${refId}`);
+  const referral = db.prepare('SELECT 1 FROM user_referrals WHERE referrer_id = ? AND referred_id = ?').get(refId, testId);
+  assert(!!referral, 'processStartParamForUser should record referral');
+
+  // today matches (empty until June 2026 — expected)
+  getBotTodayMatches(testId);
+
+  // H3: admin match result on unfinished match
+  let unfinished = db.prepare(`
+    SELECT id FROM matches WHERE status != 'finished' ORDER BY id LIMIT 1
+  `).get() as { id: number } | undefined;
+
+  if (!unfinished) {
+    const resetOk = resetMatch(1);
+    if (resetOk) unfinished = { id: 1 };
+  }
+
+  if (unfinished) {
+    const mid = unfinished.id;
+    applyMatchResult(mid, 2, 1);
+    const after = db.prepare('SELECT status, home_score, away_score FROM matches WHERE id = ?').get(mid) as {
+      status: string;
+      home_score: number;
+      away_score: number;
+    };
+    assert(after.status === 'finished', 'applyMatchResult should set status finished');
+    assert(after.home_score === 2 && after.away_score === 1, 'applyMatchResult score mismatch');
+
+    resetMatch(mid);
+    const reset = db.prepare('SELECT status FROM matches WHERE id = ?').get(mid) as { status: string };
+    assert(reset.status !== 'finished', 'resetMatch should un-finish match');
+  } else {
+    bugs.push('No unfinished match found for admin test');
+  }
+
+  // leaders
+  const leaders = getBotTopLeaders(5);
+  assert(leaders.every((l, i) => l.rank === i + 1), 'leader ranks should be sequential');
+
+  // Tournament partial update preserves untouched fields
+  const merged = resolveTournamentPickFields(
+    { winner_team_id: 'arg', second_team_id: 'fra', third_team_id: 'bra', top_scorer_player_id: 'mbappe' },
+    { winnerTeamId: 'esp' }
+  );
+  assert(merged.winnerTeamId === 'esp', 'winner should update');
+  assert(merged.secondTeamId === 'fra', 'second should be preserved on partial update');
+  assert(merged.thirdTeamId === 'bra', 'third should be preserved on partial update');
+  assert(merged.topScorerPlayerId === 'mbappe', 'scorer should be preserved on partial update');
+
+  cleanupTestUsers(testId, testId + 1, refId);
+
+  console.log(`Bugs found: ${bugs.length}`);
+  if (bugs.length) {
+    bugs.forEach(b => console.log('  ✗', b));
+    process.exit(1);
+  }
+  console.log('All checks passed.');
+}
+
+main().catch(e => {
+  console.error(e);
+  process.exit(1);
+});

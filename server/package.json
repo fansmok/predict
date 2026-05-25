@@ -1,0 +1,33 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "seed": "tsx src/seed.ts",
+    "reset": "tsx src/reset-db.ts",
+    "simulate": "tsx src/simulate.ts",
+    "simulate:10": "tsx src/simulate.ts --matches=10",
+    "stress": "tsx src/stress-test.ts --matches=40 --users=100",
+    "stress:40": "tsx src/stress-test.ts --matches=40 --users=100",
+    "verify": "tsx src/verify-changes.ts",
+    "verify:scoring": "tsx src/scoring-verify.ts",
+    "verify:leagues": "tsx src/leagues-verify.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

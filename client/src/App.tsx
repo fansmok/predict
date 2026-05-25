@@ -1,0 +1,485 @@
+import { useState, useMemo, useCallback, useEffect, startTransition } from 'react';
+import { api } from './api';
+import { Match, User, UserStats, Leader, Rule, Tab, TournamentData, TournamentOption, SquadData, SquadPlayerOption, LeagueSummary } from './types';
+import { BottomNav } from './components/BottomNav';
+import { MatchesPage } from './pages/MatchesPage';
+import { SquadPage } from './pages/SquadPage';
+import { PredictionsPage } from './pages/PredictionsPage';
+import { FriendsPage } from './pages/FriendsPage';
+import { LeaderboardPage } from './pages/LeaderboardPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { AdminPage } from './pages/AdminPage';
+import { UserPublicProfileModal } from './components/UserPublicProfileModal';
+import { CreateLeagueModal } from './components/CreateLeagueModal';
+import { RulesPage } from './pages/RulesPage';
+import { HeaderChip } from './components/HeaderChip';
+import { TabPanel } from './components/TabPanel';
+import { isTournamentComplete, countPendingPredictions, isTournamentPicksLocked, WC_OPENING_KICKOFF } from './utils';
+import wcLogo from './assets/wc-2026.jpg';
+
+const TAB_TITLES: Record<Tab, string> = {
+  matches: 'МАТЧ ЦЕНТР',
+  squad: 'Собрать команду',
+  predictions: 'Мои прогнозы',
+  friends: 'Друзья',
+  leaderboard: 'Таблица лидеров',
+  profile: 'Мой профиль',
+};
+
+const EMPTY_SQUAD: SquadData = {
+  locked: false,
+  deadline: '',
+  size: 11,
+  maxPerTeam: 2,
+  complete: false,
+  players: [],
+  points: { wins: 0, goals: 0, assists: 0, cleanSheets: 0, goalsConceded: 0, sentOffs: 0, total: 0 },
+};
+
+const EMPTY_TOURNAMENT: TournamentData = {
+  locked: false,
+  deadline: '',
+  picks: { winner: null, second: null, third: null, topScorer: null },
+  points: { winner: null, second: null, third: null, topScorer: null, total: 0 },
+  results: null,
+};
+
+export default function App() {
+  const [tab, setTab] = useState<Tab>('matches');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [user, setUser] = useState<User | null>(null);
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [doublePicks, setDoublePicks] = useState<Record<string, number>>({});
+  const [tournament, setTournament] = useState<TournamentData>(EMPTY_TOURNAMENT);
+  const [tournamentTeams, setTournamentTeams] = useState<TournamentOption[]>([]);
+  const [tournamentPlayers, setTournamentPlayers] = useState<TournamentOption[]>([]);
+  const [squad, setSquad] = useState<SquadData>(EMPTY_SQUAD);
+  const [squadOptions, setSquadOptions] = useState<SquadPlayerOption[]>([]);
+  const [squadOptionsError, setSquadOptionsError] = useState('');
+  const [leaders, setLeaders] = useState<Leader[]>([]);
+  const [leagues, setLeagues] = useState<LeagueSummary[]>([]);
+  const [canCreateLeague, setCanCreateLeague] = useState(true);
+  const [ownedLeagueCount, setOwnedLeagueCount] = useState(0);
+  const [maxOwnedLeagues, setMaxOwnedLeagues] = useState(5);
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showRules, setShowRules] = useState(false);
+  const [viewUserId, setViewUserId] = useState<number | null>(null);
+  const [showCreateLeague, setShowCreateLeague] = useState(false);
+  const [leagueToOpenId, setLeagueToOpenId] = useState<number | null>(null);
+  const [leaderboardResetKey, setLeaderboardResetKey] = useState(0);
+  /** Вкладки, уже отрисованные хотя бы раз — не размонтируем при переключении. */
+  const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set(['matches']));
+
+  const loadData = useCallback(async () => {
+    try {
+      setError('');
+      const results = await Promise.allSettled([
+        api.getMe(),
+        api.getMatches(),
+        api.getLeaderboard(),
+        api.getRules(),
+        api.getTournamentPicks(),
+        api.getTournamentOptions(),
+        api.getSquad(),
+        api.getSquadOptions(),
+        api.getLeagues(),
+      ]);
+
+      const [meR, matchesR, leadersR, rulesR, tourR, tourOptR, squadR, squadOptR, leaguesR] = results;
+
+      if (meR.status === 'fulfilled') {
+        setUser(meR.value.user);
+        setStats(meR.value.stats);
+      }
+      if (matchesR.status === 'fulfilled') {
+        setMatches(matchesR.value.matches);
+        setDoublePicks(matchesR.value.doublePicks ?? {});
+      }
+      if (leadersR.status === 'fulfilled') setLeaders(leadersR.value.leaders);
+      if (rulesR.status === 'fulfilled') setRules(rulesR.value.rules);
+      if (tourR.status === 'fulfilled') setTournament(tourR.value);
+      if (tourOptR.status === 'fulfilled') {
+        setTournamentTeams(tourOptR.value.teams);
+        setTournamentPlayers(tourOptR.value.players);
+      }
+      if (squadR.status === 'fulfilled') setSquad(squadR.value);
+      if (squadOptR.status === 'fulfilled') {
+        setSquadOptions(squadOptR.value.players ?? []);
+        setSquadOptionsError(
+          squadOptR.value.players?.length ? '' : 'Каталог игроков пуст — перезапустите сервер'
+        );
+      } else {
+        setSquadOptionsError(
+          squadOptR.reason instanceof Error
+            ? squadOptR.reason.message
+            : 'Не удалось загрузить игроков'
+        );
+      }
+      if (leaguesR.status === 'fulfilled') {
+        setLeagues(leaguesR.value.leagues);
+        setCanCreateLeague(leaguesR.value.canCreateLeague);
+        setOwnedLeagueCount(leaguesR.value.ownedLeagueCount);
+        setMaxOwnedLeagues(leaguesR.value.maxOwnedLeagues);
+      }
+
+      const failed = results.filter(r => r.status === 'rejected');
+      if (failed.length === results.length) {
+        setError('Не удалось загрузить данные');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Ошибка загрузки');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const refreshMatchesAndMe = useCallback(async () => {
+    const [matchesR, meR] = await Promise.allSettled([api.getMatches(), api.getMe()]);
+    if (matchesR.status === 'fulfilled') {
+      setMatches(matchesR.value.matches);
+      setDoublePicks(matchesR.value.doublePicks ?? {});
+    }
+    if (meR.status === 'fulfilled') {
+      setUser(meR.value.user);
+      setStats(meR.value.stats);
+    }
+  }, []);
+
+  useEffect(() => {
+    api.bootstrap().catch(() => {});
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    if (loading) return;
+    setMountedTabs(prev => {
+      const next = new Set(prev);
+      next.add('matches');
+      next.add('predictions');
+      return next.size === prev.size && prev.has('matches') && prev.has('predictions') ? prev : next;
+    });
+  }, [loading]);
+
+  useEffect(() => {
+    setMountedTabs(prev => {
+      if (prev.has(tab)) return prev;
+      const next = new Set(prev);
+      next.add(tab);
+      return next;
+    });
+  }, [tab]);
+
+  useEffect(() => {
+    if (showAdmin && user && !user.isAdmin) setShowAdmin(false);
+  }, [showAdmin, user]);
+
+  useEffect(() => {
+    if (tournament.locked || isTournamentPicksLocked(tournament, matches)) return;
+    const deadlineMs = tournament.deadline
+      ? new Date(tournament.deadline).getTime()
+      : new Date(WC_OPENING_KICKOFF).getTime();
+    const msUntil = deadlineMs - Date.now();
+    if (msUntil <= 0) {
+      api.getTournamentPicks().then(setTournament).catch(() => {});
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      api.getTournamentPicks().then(setTournament).catch(() => {});
+    }, msUntil + 250);
+    return () => window.clearTimeout(timer);
+  }, [tournament.deadline, tournament.locked, matches]);
+
+  const handleSavePrediction = async (
+    matchId: number,
+    homeScore: number,
+    awayScore: number,
+    useDouble?: boolean
+  ) => {
+    await api.savePrediction(matchId, homeScore, awayScore, useDouble);
+    await refreshMatchesAndMe();
+  };
+
+  const handleSaveTournament = async (picks: {
+    winnerTeamId?: string;
+    secondTeamId?: string;
+    thirdTeamId?: string;
+    topScorerPlayerId?: string;
+  }) => {
+    if (isTournamentPicksLocked(tournament, matches)) return;
+    const data = await api.saveTournamentPicks(picks);
+    setTournament(data);
+    await loadData();
+  };
+
+  const handleSaveFavoriteTeam = async (teamId: string) => {
+    const res = await api.saveFavoriteTeam(teamId);
+    setUser(u => (u ? { ...u, favoriteTeam: res.favoriteTeam } : u));
+    return res.favoriteTeam;
+  };
+
+  const handleSaveSquad = async (playerIds: string[]) => {
+    const data = await api.saveSquad(playerIds);
+    setSquad(data);
+    await loadData();
+  };
+
+  const tournamentComplete = isTournamentComplete(tournament);
+  const tournamentLocked = isTournamentPicksLocked(tournament, matches);
+  const showTournamentOnMatches = !tournamentComplete && !tournamentLocked;
+  const pendingPredictions = useMemo(() => countPendingPredictions(matches), [matches]);
+  const hasLeagueMembership = leagues.some(l => l.isMember);
+  /** Матч-центр: плашка до вступления в любую лигу (после блока «Собрать команду»). */
+  const showMatchCenterLeaguePromo = !hasLeagueMembership;
+
+  const refreshLeagues = useCallback(async () => {
+    const res = await api.getLeagues();
+    setLeagues(res.leagues);
+    setCanCreateLeague(res.canCreateLeague);
+    setOwnedLeagueCount(res.ownedLeagueCount);
+    setMaxOwnedLeagues(res.maxOwnedLeagues);
+  }, []);
+
+  const clearLeagueToOpen = useCallback(() => setLeagueToOpenId(null), []);
+
+  const handleLeagueCreatedFromApp = useCallback(
+    async (leagueId: number) => {
+      await refreshLeagues();
+      setShowCreateLeague(false);
+      setMountedTabs(prev => {
+        const next = new Set(prev);
+        next.add('leaderboard');
+        return next;
+      });
+      startTransition(() => setTab('leaderboard'));
+      setLeagueToOpenId(leagueId);
+    },
+    [refreshLeagues]
+  );
+
+  if (loading) {
+    return (
+      <div className="app">
+        <div className="loading" role="status" aria-live="polite">
+          <div className="spinner" aria-hidden="true" />
+          <span>Загрузка...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app">
+      <header className="header">
+        <div className="header-top">
+          <div className="logo">
+            <div className="logo-icon">
+              <img src={wcLogo} alt="ЧМ-2026" className="logo-wc" />
+            </div>
+            <div className="logo-text">
+              <h1>Лига Прогнозов</h1>
+              <span>ЧМ-2026 · США · Мексика · Канада</span>
+            </div>
+          </div>
+          <div className="header-actions">
+            {!showAdmin && !showRules && user?.isAdmin && (
+              <button
+                type="button"
+                className="header-admin-btn"
+                onClick={() => {
+                  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                  setShowAdmin(true);
+                }}
+              >
+                Admin
+              </button>
+            )}
+            {!showAdmin && !showRules && (
+              <button
+                type="button"
+                className="header-rules-btn"
+                onClick={() => {
+                  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                  setShowRules(true);
+                }}
+              >
+                Правила
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="header-meta">
+          <div className="header-subtitle">
+            {showRules ? 'ПРАВИЛА' : showAdmin ? 'Admin' : TAB_TITLES[tab]}
+          </div>
+          <HeaderChip stats={stats} />
+        </div>
+      </header>
+
+      {error && <div className="error-banner" role="alert">{error}</div>}
+
+      <main
+        className="content"
+        aria-label={showRules ? 'Правила' : showAdmin ? 'Администрирование' : TAB_TITLES[tab]}
+      >
+        {showAdmin && user?.isAdmin ? (
+          <AdminPage
+            matches={matches}
+            squadPlayers={squadOptions}
+            tournamentTeams={tournamentTeams}
+            tournamentPlayers={tournamentPlayers}
+            onRefresh={loadData}
+          />
+        ) : (
+          <>
+            {/* Вкладки не размонтируем при правилах — быстрый возврат без повторной загрузки */}
+            <div className="content-tabs" hidden={showRules}>
+        {mountedTabs.has('matches') && (
+          <TabPanel tab="matches" activeTab={tab}>
+            <MatchesPage
+              matches={matches}
+              doublePicks={doublePicks}
+              tournament={tournament}
+              tournamentTeams={tournamentTeams}
+              tournamentPlayers={tournamentPlayers}
+              squadComplete={squad.complete}
+              pendingPredictions={pendingPredictions}
+              showTournamentPicks={showTournamentOnMatches}
+              showLeaguePromo={showMatchCenterLeaguePromo}
+              canCreateLeague={canCreateLeague}
+              ownedLeagueCount={ownedLeagueCount}
+              maxOwnedLeagues={maxOwnedLeagues}
+              onOpenCreateLeague={() => setShowCreateLeague(true)}
+              onSavePrediction={handleSavePrediction}
+              onSaveTournament={handleSaveTournament}
+              onGoToSquad={() => setTab('squad')}
+              onGoToPredictions={() => setTab('predictions')}
+            />
+          </TabPanel>
+        )}
+        {mountedTabs.has('squad') && (
+          <TabPanel tab="squad" activeTab={tab}>
+            <SquadPage
+              data={squad}
+              options={squadOptions}
+              optionsError={squadOptionsError}
+              onSave={handleSaveSquad}
+            />
+          </TabPanel>
+        )}
+        {mountedTabs.has('predictions') && (
+          <TabPanel tab="predictions" activeTab={tab}>
+            <PredictionsPage
+              matches={matches}
+              doublePicks={doublePicks}
+              onSavePrediction={handleSavePrediction}
+            />
+          </TabPanel>
+        )}
+        {mountedTabs.has('friends') && user && (
+          <TabPanel tab="friends" activeTab={tab}>
+            <FriendsPage
+              myId={user.id}
+              onGoToLeaderboard={() => setTab('leaderboard')}
+              onViewUser={setViewUserId}
+            />
+          </TabPanel>
+        )}
+        {mountedTabs.has('leaderboard') && user && stats && (
+          <TabPanel tab="leaderboard" activeTab={tab}>
+            <LeaderboardPage
+              globalLeaders={leaders}
+              myId={user.id}
+              myRank={stats.rank}
+              myPoints={stats.totalPoints}
+              stats={stats}
+              leagues={leagues}
+              canCreateLeague={canCreateLeague}
+              ownedLeagueCount={ownedLeagueCount}
+              maxOwnedLeagues={maxOwnedLeagues}
+              onLeaguesChange={async () => {
+                const res = await api.getLeagues();
+                setLeagues(res.leagues);
+                setCanCreateLeague(res.canCreateLeague);
+                setOwnedLeagueCount(res.ownedLeagueCount);
+                setMaxOwnedLeagues(res.maxOwnedLeagues);
+                await loadData();
+              }}
+              leagueToOpenId={leagueToOpenId}
+              onLeagueOpened={clearLeagueToOpen}
+              leaderboardResetKey={leaderboardResetKey}
+              onViewUser={setViewUserId}
+            />
+          </TabPanel>
+        )}
+        {mountedTabs.has('profile') && user && stats && (
+          <TabPanel tab="profile" activeTab={tab}>
+            <ProfilePage
+              user={user}
+              stats={stats}
+              tournament={tournament}
+              tournamentTeams={tournamentTeams}
+              tournamentPlayers={tournamentPlayers}
+              matches={matches}
+              squad={squad}
+              leagues={leagues}
+              onOpenAdmin={user.isAdmin ? () => setShowAdmin(true) : undefined}
+              onSaveTournament={handleSaveTournament}
+              onSaveFavoriteTeam={handleSaveFavoriteTeam}
+            />
+          </TabPanel>
+        )}
+            </div>
+
+            {showRules && (
+              <RulesPage
+                rules={rules}
+                onBack={() => startTransition(() => setShowRules(false))}
+              />
+            )}
+          </>
+        )}
+      </main>
+
+      {showAdmin && (
+        <button type="button" className="admin-back-btn" onClick={() => setShowAdmin(false)}>
+          ← Назад
+        </button>
+      )}
+
+      {!showAdmin && (
+        <BottomNav
+          active={tab}
+          onChange={next => {
+            setShowRules(false);
+            if (next === 'leaderboard') {
+              setLeaderboardResetKey(k => k + 1);
+            }
+            startTransition(() => setTab(next));
+          }}
+          pendingPredictions={pendingPredictions}
+        />
+      )}
+
+      {viewUserId != null && (
+        <UserPublicProfileModal
+          userId={viewUserId}
+          myId={user?.id}
+          tournamentTeams={tournamentTeams}
+          tournamentPlayers={tournamentPlayers}
+          onClose={() => setViewUserId(null)}
+        />
+      )}
+
+      <CreateLeagueModal
+        open={showCreateLeague}
+        onClose={() => setShowCreateLeague(false)}
+        onCreated={async leagueId => {
+          await handleLeagueCreatedFromApp(leagueId);
+        }}
+      />
+    </div>
+  );
+}
