@@ -1,13 +1,8 @@
 import { formatMatches, formatPoints, formatPointsWord } from './plural.js';
+import { getBotUsername } from './bot-config.js';
 
 const BOT_TOKEN = process.env.BOT_TOKEN ?? '';
 const WEBAPP_URL = process.env.WEBAPP_URL ?? 'http://localhost:5173';
-const BOT_USERNAME = process.env.BOT_USERNAME ?? '';
-
-function getBotUsername(): string {
-  if (BOT_USERNAME) return BOT_USERNAME.replace('@', '');
-  return 'your_bot';
-}
 
 export function webAppUrl(startParam?: string): string {
   return startParam ? `${WEBAPP_URL}?startapp=${startParam}` : WEBAPP_URL;

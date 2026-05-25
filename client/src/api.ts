@@ -1,3 +1,5 @@
+import { getStartParam } from './utils';
+
 const API_BASE = '/api';
 
 function getHeaders(): HeadersInit {
@@ -90,7 +92,7 @@ export const api = {
   bootstrap: () =>
     request<{ success: boolean }>('/bootstrap', {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify({ startParam: getStartParam() || undefined }),
     }),
   getFriends: () => request<import('./types').FriendsData>('/friends'),
   searchFriends: (q: string) =>

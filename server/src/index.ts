@@ -13,6 +13,7 @@ import {
   isProduction,
   secureApiHeaders,
 } from './security.js';
+import { getBotUsername, initBotUsername } from './bot-config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
@@ -102,19 +103,35 @@ app.get('*', (_req, res) => {
   });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Dev mode: ${process.env.DEV_MODE === 'true' ? 'ON' : 'OFF'}`);
-  console.log(`Admins configured: ${getAdminCount()}`);
-  startCronJobs();
-});
-
-server.on('error', (err: NodeJS.ErrnoException) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`\n❌ Порт ${PORT} уже занят. Остановите предыдущий процесс:`);
-    console.error(`   lsof -ti :${PORT} | xargs kill -9`);
-    console.error(`   или: npm run dev — только один экземпляр сервера\n`);
+async function startServer() {
+  await initBotUsername();
+  if (isProduction() && getBotUsername() === 'your_bot') {
+    console.error('[security] FATAL: не удалось определить BOT_USERNAME — задайте в .env');
     process.exit(1);
   }
-  throw err;
+
+  const server = app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Dev mode: ${process.env.DEV_MODE === 'true' ? 'ON' : 'OFF'}`);
+    console.log(`Admins configured: ${getAdminCount()}`);
+    if (getBotUsername() !== 'your_bot') {
+      console.log(`Invite links: t.me/${getBotUsername()}`);
+    }
+    startCronJobs();
+  });
+
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n❌ Порт ${PORT} уже занят. Остановите предыдущий процесс:`);
+      console.error(`   lsof -ti :${PORT} | xargs kill -9`);
+      console.error(`   или: npm run dev — только один экземпляр сервера\n`);
+      process.exit(1);
+    }
+    throw err;
+  });
+}
+
+startServer().catch(err => {
+  console.error('[startup]', err);
+  process.exit(1);
 });

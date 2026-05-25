@@ -757,6 +757,10 @@ router.post('/bootstrap', authMiddleware, (req, res) => {
 
   acceptInviteOnJoin(userId);
 
+  const startParam =
+    typeof req.body?.startParam === 'string' ? req.body.startParam.trim().slice(0, 256) : '';
+  if (startParam) processStartParam(userId, startParam);
+
   res.json({ success: true });
 });
 
