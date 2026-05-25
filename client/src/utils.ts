@@ -213,6 +213,25 @@ export function getStartParam(): string {
   return unsafe?.start_param ?? '';
 }
 
+export function parseLeagueStartParam(startParam: string): { code: string; inviterId?: number } | null {
+  if (!startParam.startsWith('league_')) return null;
+  const payload = startParam.slice(7).trim();
+  if (!payload) return null;
+
+  const match = payload.match(/^([A-F0-9]{8})(?:_(\d+))?$/i);
+  if (match) {
+    const inviterId = match[2] ? parseInt(match[2], 10) : undefined;
+    return {
+      code: match[1].toUpperCase(),
+      inviterId: inviterId && inviterId > 0 ? inviterId : undefined,
+    };
+  }
+
+  const legacyCode = payload.split('_')[0]?.toUpperCase() ?? '';
+  if (legacyCode.length >= 4) return { code: legacyCode.slice(0, 16) };
+  return null;
+}
+
 export function shareTelegramLink(link: string, text: string) {
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
   const tg = window.Telegram?.WebApp;

@@ -14,7 +14,7 @@ import { CreateLeagueModal } from './components/CreateLeagueModal';
 import { RulesPage } from './pages/RulesPage';
 import { HeaderChip } from './components/HeaderChip';
 import { TabPanel } from './components/TabPanel';
-import { isTournamentComplete, countPendingPredictions, isTournamentPicksLocked, WC_OPENING_KICKOFF, getStartParam } from './utils';
+import { isTournamentComplete, countPendingPredictions, isTournamentPicksLocked, WC_OPENING_KICKOFF, getStartParam, parseLeagueStartParam } from './utils';
 import wcLogo from './assets/wc-2026.jpg';
 
 const TAB_TITLES: Record<Tab, string> = {
@@ -158,9 +158,9 @@ export default function App() {
   useEffect(() => {
     if (loading || leagueInviteHandled.current) return;
     const startParam = getStartParam();
-    if (!startParam.startsWith('league_')) return;
-    const code = startParam.slice(7).slice(0, 16);
-    if (!code) return;
+    const parsed = parseLeagueStartParam(startParam);
+    if (!parsed?.code) return;
+    const code = parsed.code;
 
     leagueInviteHandled.current = true;
     api
@@ -424,6 +424,7 @@ export default function App() {
           <TabPanel tab="friends" activeTab={tab}>
             <FriendsPage
               myId={user.id}
+              isActive={tab === 'friends'}
               onGoToLeaderboard={() => setTab('leaderboard')}
               onViewUser={setViewUserId}
             />

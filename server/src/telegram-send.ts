@@ -1,5 +1,6 @@
 import { formatMatches, formatPoints, formatPointsWord } from './plural.js';
 import { getBotUsername } from './bot-config.js';
+import { buildLeagueStartParam } from './invite-links.js';
 
 const BOT_TOKEN = process.env.BOT_TOKEN ?? '';
 const WEBAPP_URL = process.env.WEBAPP_URL ?? 'http://localhost:5173';
@@ -13,9 +14,9 @@ export function buildAppInviteLink(referrerId: number): string {
   return `https://t.me/${bot}?start=ref_${referrerId}`;
 }
 
-export function buildLeagueInviteLink(code: string): string {
+export function buildLeagueInviteLink(code: string, inviterId?: number): string {
   const bot = getBotUsername();
-  return `https://t.me/${bot}?start=league_${code}`;
+  return `https://t.me/${bot}?start=${buildLeagueStartParam(code, inviterId)}`;
 }
 
 export async function sendTelegramMessage(
@@ -61,9 +62,15 @@ export async function sendLeagueInviteMessage(
   inviteeId: number,
   inviterName: string,
   _leagueName: string,
-  code: string
+  code: string,
+  inviterId: number
 ): Promise<boolean> {
-  return sendTelegramMessage(inviteeId, buildInviteText(inviterName), 'Вступить в лигу', webAppUrl(`league_${code}`));
+  return sendTelegramMessage(
+    inviteeId,
+    buildInviteText(inviterName),
+    'Вступить в лигу',
+    webAppUrl(buildLeagueStartParam(code, inviterId))
+  );
 }
 
 export interface EveningReminderLine {

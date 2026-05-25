@@ -208,6 +208,15 @@ function migrateDatabase() {
   }
 
   runSchemaMigrations();
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_start_params (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      start_param TEXT NOT NULL,
+      processed_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, start_param)
+    );
+  `);
 }
 
 function seedIfEmpty() {

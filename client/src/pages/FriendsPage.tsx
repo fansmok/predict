@@ -11,6 +11,7 @@ import { PlatinumName } from '../components/PlatinumName';
 
 interface Props {
   myId: number;
+  isActive?: boolean;
   onGoToLeaderboard: () => void;
   onViewUser: (userId: number) => void;
 }
@@ -43,7 +44,7 @@ function formatJoinedAt(iso?: string): string | null {
   return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 }
 
-export function FriendsPage({ onGoToLeaderboard, onViewUser }: Props) {
+export function FriendsPage({ isActive = true, onGoToLeaderboard, onViewUser }: Props) {
   const [data, setData] = useState<FriendsData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -57,8 +58,9 @@ export function FriendsPage({ onGoToLeaderboard, onViewUser }: Props) {
   }, []);
 
   useEffect(() => {
+    if (!isActive) return;
     load();
-  }, [load]);
+  }, [isActive, load]);
 
   const joined = data?.friends ?? [];
   const pending = data?.pending ?? [];

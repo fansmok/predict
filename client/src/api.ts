@@ -117,7 +117,7 @@ export const api = {
   joinLeague: (code: string) =>
     request<{ league: import('./types').LeagueSummary }>('/leagues/join', {
       method: 'POST',
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, startParam: getStartParam() || undefined }),
     }),
   getLeagueLeaderboard: (
     leagueId: number,

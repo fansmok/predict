@@ -166,7 +166,7 @@ export function getLeagueSummary(leagueId: number, userId: number): LeagueSummar
     isOwner: row.owner_id === userId,
     isMember,
     ...(isMember
-      ? { code: row.code, inviteLink: buildLeagueInviteLink(row.code) }
+      ? { code: row.code, inviteLink: buildLeagueInviteLink(row.code, userId) }
       : {}),
   };
 }
@@ -352,7 +352,7 @@ export async function inviteLeagueMembers(
       continue;
     }
 
-    const ok = await sendLeagueInviteMessage(inviteeId, inviterName, league.name, league.code);
+    const ok = await sendLeagueInviteMessage(inviteeId, inviterName, league.name, league.code, inviterId);
     if (ok) sent++;
     else failed++;
   }

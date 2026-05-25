@@ -38,8 +38,8 @@ import {
   searchUsers,
   sendFriendInvites,
   acceptInviteOnJoin,
-  recordReferralForLeagueOwner,
 } from './friends.js';
+import { parseLeagueStartParam, recordLeagueJoinReferral } from './invite-links.js';
 import { buildAppInviteLink, buildLeagueInviteLink } from './telegram-send.js';
 import { processStartParamForUser } from './bot-start.js';
 import { getPlatinumProgress, getPlatinumFlags, syncReferrersPlatinumStatus } from './platinum.js';
@@ -819,7 +819,7 @@ router.post('/leagues', authMiddleware, (req, res) => {
     const league = createLeague(req.user!.id, name, emoji, emojiBg);
     res.json({
       league,
-      inviteLink: buildLeagueInviteLink(league.code!),
+      inviteLink: buildLeagueInviteLink(league.code!, req.user!.id),
     });
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'Ошибка создания' });
@@ -834,9 +834,10 @@ router.post('/leagues/join', authMiddleware, (req, res) => {
 
   try {
     const league = joinLeagueByCode(req.user!.id, code);
-    if (league.ownerId !== req.user!.id) {
-      recordReferralForLeagueOwner(league.ownerId, req.user!.id);
-    }
+    const bodyStartParam =
+      typeof req.body?.startParam === 'string' ? req.body.startParam.trim().slice(0, 256) : '';
+    const parsed = bodyStartParam ? parseLeagueStartParam(bodyStartParam) : null;
+    recordLeagueJoinReferral(league.id, parsed?.inviterId, league.ownerId, req.user!.id);
     res.json({ league });
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'Лига не найдена' });
