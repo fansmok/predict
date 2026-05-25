@@ -27,29 +27,24 @@ export function buildLeagueStartParam(code: string, inviterId?: number): string 
   return `league_${normalized}`;
 }
 
-function isLeagueMember(leagueId: number, userId: number): boolean {
-  return !!db.prepare(`
-    SELECT 1 FROM league_members WHERE league_id = ? AND user_id = ?
-  `).get(leagueId, userId);
-}
-
 export function recordLeagueJoinReferral(
   leagueId: number,
   inviterId: number | undefined,
   ownerId: number,
   memberId: number
 ): void {
-  if (memberId === ownerId) return;
+  void leagueId;
+  if (memberId === inviterId) return;
 
   let referrerId = ownerId;
   if (inviterId && inviterId > 0 && inviterId !== memberId) {
-    const inviterExists = db.prepare('SELECT id FROM users WHERE id = ?').get(inviterId);
-    if (inviterExists && isLeagueMember(leagueId, inviterId)) {
-      referrerId = inviterId;
-    }
+    const inviter = db.prepare('SELECT id FROM users WHERE id = ?').get(inviterId);
+    if (inviter) referrerId = inviterId;
   }
 
-  recordReferral(referrerId, memberId);
+  if (referrerId !== memberId) {
+    recordReferral(referrerId, memberId);
+  }
 }
 
 /** Вступление в лигу по start_param — идемпотентно, можно вызывать повторно. */

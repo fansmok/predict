@@ -14,7 +14,7 @@ import { CreateLeagueModal } from './components/CreateLeagueModal';
 import { RulesPage } from './pages/RulesPage';
 import { HeaderChip } from './components/HeaderChip';
 import { TabPanel } from './components/TabPanel';
-import { isTournamentComplete, countPendingPredictions, isTournamentPicksLocked, WC_OPENING_KICKOFF, getStartParam, parseLeagueStartParam } from './utils';
+import { isTournamentComplete, countPendingPredictions, isTournamentPicksLocked, WC_OPENING_KICKOFF, getStartParam } from './utils';
 import wcLogo from './assets/wc-2026.jpg';
 
 const TAB_TITLES: Record<Tab, string> = {
@@ -70,6 +70,7 @@ export default function App() {
   const [showCreateLeague, setShowCreateLeague] = useState(false);
   const [leagueToOpenId, setLeagueToOpenId] = useState<number | null>(null);
   const [leaderboardResetKey, setLeaderboardResetKey] = useState(0);
+  const [inviteBanner, setInviteBanner] = useState('');
   const contentRef = useRef<HTMLElement>(null);
   /** Вкладки, уже отрисованные хотя бы раз — не размонтируем при переключении. */
   const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set(['matches']));
@@ -154,47 +155,60 @@ export default function App() {
     loadData();
   }, [loadData]);
 
-  const leagueInviteStartParam = (() => {
-    const sp = getStartParam();
-    return parseLeagueStartParam(sp) ? sp : '';
-  })();
-
   useEffect(() => {
-    if (loading || !leagueInviteStartParam) return;
+    if (loading) return;
 
     let cancelled = false;
-    void (async () => {
+    let timer: number | undefined;
+
+    const tryInvite = async (attempt: number) => {
+      const startParam = getStartParam();
+      if (!startParam || cancelled) {
+        if (!startParam && attempt < 8 && !cancelled) {
+          timer = window.setTimeout(() => void tryInvite(attempt + 1), 250);
+        }
+        return;
+      }
+
       try {
         await api.bootstrap();
-        const parsed = parseLeagueStartParam(leagueInviteStartParam);
-        if (!parsed?.code || cancelled) return;
-
-        const res = await api.joinLeague(parsed.code);
+        const result = await api.applyInvite(startParam);
         if (cancelled) return;
 
-        setLeagueToOpenId(res.league.id);
-        setTab('leaderboard');
-        setMountedTabs(prev => {
-          const next = new Set(prev);
-          next.add('leaderboard');
-          return next;
-        });
+        if (result.type === 'league' && result.league) {
+          setLeagueToOpenId(result.league.id);
+          setTab('leaderboard');
+          setMountedTabs(prev => {
+            const next = new Set(prev);
+            next.add('leaderboard');
+            return next;
+          });
+          setInviteBanner(`Вы вступили в лигу «${result.league.name}»`);
+          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
 
-        const leaguesRes = await api.getLeagues();
-        if (cancelled) return;
-        setLeagues(leaguesRes.leagues);
-        setCanCreateLeague(leaguesRes.canCreateLeague);
-        setOwnedLeagueCount(leaguesRes.ownedLeagueCount);
-        setMaxOwnedLeagues(leaguesRes.maxOwnedLeagues);
-      } catch {
-        /* join мог уже выполниться через bootstrap или /start бота */
+          const leaguesRes = await api.getLeagues();
+          if (!cancelled) {
+            setLeagues(leaguesRes.leagues);
+            setCanCreateLeague(leaguesRes.canCreateLeague);
+            setOwnedLeagueCount(leaguesRes.ownedLeagueCount);
+            setMaxOwnedLeagues(leaguesRes.maxOwnedLeagues);
+          }
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : '';
+        if (msg && !msg.includes('найдена') && attempt < 2 && !cancelled) {
+          timer = window.setTimeout(() => void tryInvite(attempt + 1), 400);
+        }
       }
-    })();
+    };
+
+    void tryInvite(0);
 
     return () => {
       cancelled = true;
+      if (timer) window.clearTimeout(timer);
     };
-  }, [loading, leagueInviteStartParam]);
+  }, [loading]);
 
   useEffect(() => {
     if (loading || tab !== 'leaderboard') return;
@@ -389,6 +403,11 @@ export default function App() {
       </header>
 
       {error && <div className="error-banner" role="alert">{error}</div>}
+      {inviteBanner && (
+        <div className="error-banner" style={{ background: 'var(--accent)', color: '#fff' }} role="status">
+          {inviteBanner}
+        </div>
+      )}
 
       <main
         ref={contentRef}

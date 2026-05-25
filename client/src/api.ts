@@ -94,6 +94,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ startParam: getStartParam() || undefined }),
     }),
+  applyInvite: (startParam: string) =>
+    request<{ ok: boolean; type: string; league?: import('./types').LeagueSummary }>('/invites/apply', {
+      method: 'POST',
+      body: JSON.stringify({ startParam }),
+    }),
   getFriends: () => request<import('./types').FriendsData>('/friends'),
   searchFriends: (q: string) =>
     request<{ users: import('./types').FriendUser[] }>(`/friends/search?q=${encodeURIComponent(q)}`),

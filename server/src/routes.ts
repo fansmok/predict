@@ -764,6 +764,32 @@ router.post('/bootstrap', authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
+router.post('/invites/apply', authMiddleware, (req, res) => {
+  const startParam =
+    typeof req.body?.startParam === 'string' ? req.body.startParam.trim().slice(0, 256) : '';
+  if (!startParam) {
+    return res.status(400).json({ error: 'Нет параметра приглашения' });
+  }
+
+  acceptInviteOnJoin(req.user!.id);
+
+  try {
+    if (startParam.startsWith('league_')) {
+      const league = applyLeagueInvite(req.user!.id, startParam);
+      return res.json({ ok: true, type: 'league', league });
+    }
+    if (startParam.startsWith('ref_')) {
+      processStartParamForUser(req.user!.id, startParam);
+      return res.json({ ok: true, type: 'ref' });
+    }
+    return res.status(400).json({ error: 'Неизвестная ссылка' });
+  } catch (e) {
+    return res.status(400).json({
+      error: e instanceof Error ? e.message : 'Не удалось принять приглашение',
+    });
+  }
+});
+
 router.get('/friends', authMiddleware, (req, res) => {
   const userId = req.user!.id;
   res.json({

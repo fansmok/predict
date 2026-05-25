@@ -79,6 +79,16 @@ export function getFriends(userId: number): FriendUser[] {
     ORDER BY joined_at DESC
   `).all(userId, userId) as FriendRow[];
 
+  const leagueInvitees = db.prepare(`
+    SELECT DISTINCT u.id, u.first_name, u.last_name, u.username, u.photo_url, r.created_at as joined_at
+    FROM user_referrals r
+    JOIN users u ON u.id = r.referred_id
+    JOIN league_members lm ON lm.user_id = u.id
+    JOIN league_members lm_inv ON lm_inv.league_id = lm.league_id AND lm_inv.user_id = r.referrer_id
+    WHERE r.referrer_id = ? AND r.referred_id != ?
+    ORDER BY r.created_at DESC
+  `).all(userId, userId) as FriendRow[];
+
   const map = new Map<number, FriendUser>();
   for (const row of referrals) {
     if (row.id === userId) continue;
@@ -89,6 +99,10 @@ export function getFriends(userId: number): FriendUser[] {
     map.set(row.id, toFriendUser(row, 'friend', row.joined_at));
   }
   for (const row of leagueJoins) {
+    if (row.id === userId || map.has(row.id)) continue;
+    map.set(row.id, toFriendUser(row, 'league', row.joined_at));
+  }
+  for (const row of leagueInvitees) {
     if (row.id === userId || map.has(row.id)) continue;
     map.set(row.id, toFriendUser(row, 'league', row.joined_at));
   }

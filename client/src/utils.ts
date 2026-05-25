@@ -209,8 +209,48 @@ export function isTournamentComplete(data: import('./types').TournamentData): bo
 }
 
 export function getStartParam(): string {
-  const unsafe = window.Telegram?.WebApp?.initDataUnsafe as { start_param?: string } | undefined;
-  return unsafe?.start_param ?? '';
+  const tg = window.Telegram?.WebApp;
+  if (tg) {
+    const unsafe = tg.initDataUnsafe as { start_param?: string } | undefined;
+    if (unsafe?.start_param?.trim()) return unsafe.start_param.trim();
+
+    if (tg.initData) {
+      const fromInit = new URLSearchParams(tg.initData).get('start_param');
+      if (fromInit?.trim()) return fromInit.trim();
+    }
+  }
+
+  const fromUrlParams = (params: URLSearchParams): string =>
+    params.get('tgWebAppStartParam')?.trim() ||
+    params.get('startapp')?.trim() ||
+    '';
+
+  try {
+    const fromUrl = fromUrlParams(new URL(window.location.href).searchParams);
+    if (fromUrl) return fromUrl;
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const hash = window.location.hash.replace(/^#/, '');
+    if (!hash) return '';
+
+    const hashParams = new URLSearchParams(hash);
+    const fromHash = fromUrlParams(hashParams);
+    if (fromHash) return fromHash;
+
+    const tgWebAppData = hashParams.get('tgWebAppData');
+    if (tgWebAppData) {
+      const decoded = decodeURIComponent(tgWebAppData);
+      const sp = new URLSearchParams(decoded).get('start_param');
+      if (sp?.trim()) return sp.trim();
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return '';
 }
 
 export function parseLeagueStartParam(startParam: string): { code: string; inviterId?: number } | null {
