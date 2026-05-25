@@ -10,6 +10,7 @@ APP_DIR="/opt/predict"
 REPO_URL="https://github.com/fansmok/predict.git"
 BOT_TOKEN="${BOT_TOKEN:?Задайте BOT_TOKEN}"
 BOT_USERNAME="${BOT_USERNAME:?Задайте BOT_USERNAME}"
+WEBAPP_SHORT_NAME="${WEBAPP_SHORT_NAME:-predictliga}"
 DOMAIN="${DOMAIN:?Задайте DOMAIN (например predictapp.ru)}"
 ADMIN_USER_IDS="${ADMIN_USER_IDS:-}"
 WEBAPP_URL="https://${DOMAIN}"
@@ -46,6 +47,7 @@ echo "==> .env"
 cat > "$APP_DIR/.env" <<EOF
 BOT_TOKEN=${BOT_TOKEN}
 BOT_USERNAME=${BOT_USERNAME}
+WEBAPP_SHORT_NAME=${WEBAPP_SHORT_NAME}
 WEBAPP_URL=${WEBAPP_URL}
 SERVER_URL=${SERVER_URL}
 PORT=${PORT}
@@ -113,5 +115,6 @@ echo "============================================"
 echo "  Готово!"
 echo "  URL:  ${WEBAPP_URL}"
 echo "  Bot:  @${BOT_USERNAME}"
+echo "  App:  t.me/${BOT_USERNAME}/${WEBAPP_SHORT_NAME}"
 echo "  PM2:  pm2 status"
 echo "============================================"

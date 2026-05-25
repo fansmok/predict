@@ -8,7 +8,10 @@ export function getBotUsername(): string {
 }
 
 export function getWebAppShortName(): string {
-  return (process.env.WEBAPP_SHORT_NAME ?? '').trim();
+  const explicit = (process.env.WEBAPP_SHORT_NAME ?? '').trim();
+  if (explicit) return explicit;
+  if (getBotUsername() === 'predictliga_bot') return 'predictliga';
+  return '';
 }
 
 /** Подтягивает @username бота из BOT_USERNAME или Telegram getMe. */
