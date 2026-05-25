@@ -10,7 +10,7 @@ import { applyMatchResult, resetMatch } from './admin.js';
 import { registerTelegramUser, getBotUserStats, getBotTodayMatches, getBotTopLeaders } from './bot-api.js';
 import { processStartParamForUser } from './bot-start.js';
 import { applyLeagueInvite, parseLeagueStartParam } from './invite-links.js';
-import { webAppUrl } from './telegram-send.js';
+import { buildTelegramMiniAppLink, webAppUrl } from './telegram-send.js';
 import { createLeague, joinLeagueByCode } from './leagues.js';
 import { resolveTournamentPickFields } from './tournament.js';
 import { isAdminUser, resetAdminIdsCache } from './admins.js';
@@ -103,6 +103,9 @@ async function main() {
 
   const appLink = webAppUrl(startParam);
   assert(appLink.includes('tgWebAppStartParam='), 'webAppUrl must use tgWebAppStartParam');
+
+  const publicLink = buildTelegramMiniAppLink(startParam);
+  assert(publicLink.includes('?start='), 'invite link should use bot /start');
 
   db.prepare('DELETE FROM league_members WHERE league_id = ?').run(league.id);
   db.prepare('DELETE FROM leagues WHERE id = ?').run(league.id);

@@ -1,4 +1,4 @@
-import { getStartParam } from './utils';
+import { captureStartParam } from './utils';
 
 const API_BASE = '/api';
 
@@ -10,6 +10,11 @@ function getHeaders(): HeadersInit {
   const tg = window.Telegram?.WebApp;
   if (tg?.initData) {
     headers['X-Telegram-Init-Data'] = tg.initData;
+  }
+
+  const startParam = captureStartParam();
+  if (startParam) {
+    headers['X-Telegram-Start-Param'] = startParam;
   }
 
   return headers;
@@ -92,7 +97,7 @@ export const api = {
   bootstrap: () =>
     request<{ success: boolean }>('/bootstrap', {
       method: 'POST',
-      body: JSON.stringify({ startParam: getStartParam() || undefined }),
+      body: JSON.stringify({ startParam: captureStartParam() || undefined }),
     }),
   applyInvite: (startParam: string) =>
     request<{ ok: boolean; type: string; league?: import('./types').LeagueSummary }>('/invites/apply', {
@@ -122,7 +127,7 @@ export const api = {
   joinLeague: (code: string) =>
     request<{ league: import('./types').LeagueSummary }>('/leagues/join', {
       method: 'POST',
-      body: JSON.stringify({ code, startParam: getStartParam() || undefined }),
+      body: JSON.stringify({ code, startParam: captureStartParam() || undefined }),
     }),
   getLeagueLeaderboard: (
     leagueId: number,

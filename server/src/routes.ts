@@ -121,6 +121,19 @@ function processStartParam(userId: number, startParam: string) {
   processStartParamForUser(userId, startParam);
 }
 
+/** start_param из initData или заголовка клиента (если Telegram не положил в initData). */
+function resolveStartParam(req: Request, initData?: string): string {
+  if (initData) {
+    const fromInit = new URLSearchParams(initData).get('start_param')?.trim();
+    if (fromInit) return fromInit.slice(0, 256);
+  }
+  const header = req.headers['x-telegram-start-param'];
+  if (typeof header === 'string' && header.trim()) {
+    return header.trim().slice(0, 256);
+  }
+  return '';
+}
+
 function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const initData = req.headers['x-telegram-init-data'] as string | undefined;
 
@@ -129,8 +142,7 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
     const tgUser = validateTelegramInitData(initData, botToken);
     if (tgUser) {
       req.user = upsertUser(tgUser);
-      const params = new URLSearchParams(initData);
-      const startParam = params.get('start_param') ?? '';
+      const startParam = resolveStartParam(req, initData);
       if (startParam) processStartParam(req.user.id, startParam);
       return next();
     }
@@ -776,6 +788,7 @@ router.post('/invites/apply', authMiddleware, (req, res) => {
   try {
     if (startParam.startsWith('league_')) {
       const league = applyLeagueInvite(req.user!.id, startParam);
+      console.log('[invites/apply] league join', req.user!.id, startParam.slice(0, 48), '->', league.id);
       return res.json({ ok: true, type: 'league', league });
     }
     if (startParam.startsWith('ref_')) {

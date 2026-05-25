@@ -62,6 +62,15 @@ export function FriendsPage({ isActive = true, onGoToLeaderboard, onViewUser }: 
     load();
   }, [isActive, load]);
 
+  useEffect(() => {
+    if (!isActive) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [isActive, load]);
+
   const joined = data?.friends ?? [];
   const pending = data?.pending ?? [];
 

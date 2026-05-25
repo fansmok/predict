@@ -208,6 +208,8 @@ export function isTournamentComplete(data: import('./types').TournamentData): bo
   return !!(winner && second && third && topScorer);
 }
 
+const START_PARAM_STORAGE_KEY = 'liga_start_param';
+
 export function getStartParam(): string {
   const tg = window.Telegram?.WebApp;
   if (tg) {
@@ -251,6 +253,32 @@ export function getStartParam(): string {
   }
 
   return '';
+}
+
+/** Читает start_param и сохраняет в sessionStorage (Telegram иногда отдаёт его только в URL). */
+export function captureStartParam(): string {
+  const fresh = getStartParam();
+  if (fresh) {
+    try {
+      sessionStorage.setItem(START_PARAM_STORAGE_KEY, fresh);
+    } catch {
+      /* ignore */
+    }
+    return fresh;
+  }
+  try {
+    return sessionStorage.getItem(START_PARAM_STORAGE_KEY)?.trim() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function clearCapturedStartParam(): void {
+  try {
+    sessionStorage.removeItem(START_PARAM_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function parseLeagueStartParam(startParam: string): { code: string; inviterId?: number } | null {

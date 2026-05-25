@@ -13,14 +13,25 @@ export function webAppUrl(startParam?: string): string {
   return url.toString();
 }
 
-/** Публичная ссылка-приглашение: прямо в Mini App или через /start бота. */
-export function buildTelegramMiniAppLink(startParam: string): string {
+/** Ссылка через /start бота — надёжнее direct startapp (сначала join на сервере, потом кнопка в приложение). */
+export function buildBotStartLink(startParam: string): string {
+  const bot = getBotUsername();
+  return `https://t.me/${bot}?start=${encodeURIComponent(startParam)}`;
+}
+
+/** Прямой запуск Mini App (запасной вариант). */
+export function buildDirectMiniAppLink(startParam: string): string {
   const bot = getBotUsername();
   const shortName = getWebAppShortName();
   if (shortName) {
     return `https://t.me/${bot}/${shortName}?startapp=${encodeURIComponent(startParam)}`;
   }
-  return `https://t.me/${bot}?start=${encodeURIComponent(startParam)}`;
+  return buildBotStartLink(startParam);
+}
+
+/** Публичная ссылка-приглашение (используем /start бота). */
+export function buildTelegramMiniAppLink(startParam: string): string {
+  return buildBotStartLink(startParam);
 }
 
 export function buildAppInviteLink(referrerId: number): string {

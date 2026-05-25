@@ -14,7 +14,15 @@ import { CreateLeagueModal } from './components/CreateLeagueModal';
 import { RulesPage } from './pages/RulesPage';
 import { HeaderChip } from './components/HeaderChip';
 import { TabPanel } from './components/TabPanel';
-import { isTournamentComplete, countPendingPredictions, isTournamentPicksLocked, WC_OPENING_KICKOFF, getStartParam } from './utils';
+import {
+  isTournamentComplete,
+  countPendingPredictions,
+  isTournamentPicksLocked,
+  WC_OPENING_KICKOFF,
+  captureStartParam,
+  clearCapturedStartParam,
+  parseLeagueStartParam,
+} from './utils';
 import wcLogo from './assets/wc-2026.jpg';
 
 const TAB_TITLES: Record<Tab, string> = {
@@ -162,10 +170,11 @@ export default function App() {
     let timer: number | undefined;
 
     const tryInvite = async (attempt: number) => {
-      const startParam = getStartParam();
+      window.Telegram?.WebApp?.ready();
+      const startParam = captureStartParam();
       if (!startParam || cancelled) {
-        if (!startParam && attempt < 8 && !cancelled) {
-          timer = window.setTimeout(() => void tryInvite(attempt + 1), 250);
+        if (!startParam && attempt < 24 && !cancelled) {
+          timer = window.setTimeout(() => void tryInvite(attempt + 1), 400);
         }
         return;
       }
@@ -176,8 +185,10 @@ export default function App() {
         if (cancelled) return;
 
         if (result.type === 'league' && result.league) {
+          clearCapturedStartParam();
           setLeagueToOpenId(result.league.id);
           setTab('leaderboard');
+          setLeaderboardResetKey(k => k + 1);
           setMountedTabs(prev => {
             const next = new Set(prev);
             next.add('leaderboard');
@@ -193,11 +204,17 @@ export default function App() {
             setOwnedLeagueCount(leaguesRes.ownedLeagueCount);
             setMaxOwnedLeagues(leaguesRes.maxOwnedLeagues);
           }
+        } else if (parseLeagueStartParam(startParam)) {
+          setInviteBanner('Приглашение принято. Откройте вкладку «Рейтинг».');
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : '';
-        if (msg && !msg.includes('найдена') && attempt < 2 && !cancelled) {
-          timer = window.setTimeout(() => void tryInvite(attempt + 1), 400);
+        const msg = e instanceof Error ? e.message : 'Не удалось принять приглашение';
+        if (attempt < 3 && !cancelled) {
+          timer = window.setTimeout(() => void tryInvite(attempt + 1), 600);
+          return;
+        }
+        if (parseLeagueStartParam(startParam)) {
+          setInviteBanner(msg);
         }
       }
     };
