@@ -33,11 +33,17 @@ if (isProduction()) {
 const webappOrigin = process.env.WEBAPP_URL ?? 'http://localhost:5173';
 app.use(cors({
   origin(origin, callback) {
-    if (!origin) {
-      if (isProduction()) return callback(new Error('Not allowed by CORS'));
-      return callback(null, true);
-    }
+    // Нет Origin — прямой заход в браузере, curl, health-check
+    if (!origin) return callback(null, true);
     if (origin === webappOrigin) return callback(null, true);
+    // Тот же домен по http или https (до/после certbot)
+    try {
+      if (new URL(origin).hostname === new URL(webappOrigin).hostname) {
+        return callback(null, true);
+      }
+    } catch {
+      /* ignore */
+    }
     if (process.env.DEV_MODE === 'true' && !isProduction() && /^http:\/\/localhost(:\d+)?$/.test(origin)) {
       return callback(null, true);
     }
