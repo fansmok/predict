@@ -38,6 +38,7 @@ import {
   searchUsers,
   sendFriendInvites,
   acceptInviteOnJoin,
+  recordReferralForLeagueOwner,
 } from './friends.js';
 import { buildAppInviteLink, buildLeagueInviteLink } from './telegram-send.js';
 import { processStartParamForUser } from './bot-start.js';
@@ -96,6 +97,9 @@ import {
 } from './football-sync.js';
 
 const router = Router();
+
+/** Минимальный интервал между изменениями уже сохранённого прогноза (сек). Новые прогнозы — без ограничения. */
+const PREDICTION_UPDATE_COOLDOWN_SEC = 10;
 
 router.use('/bot', botRoutes);
 
@@ -467,6 +471,19 @@ router.post('/predictions', authMiddleware, (req, res) => {
     SELECT 1 FROM predictions WHERE user_id = ? AND match_id = ?
   `).get(userId, matchId);
 
+  if (hadPrediction) {
+    const tooSoon = db.prepare(`
+      SELECT 1 FROM predictions
+      WHERE user_id = ? AND match_id = ?
+        AND updated_at > datetime('now', '-' || ? || ' seconds')
+    `).get(userId, matchId, PREDICTION_UPDATE_COOLDOWN_SEC);
+    if (tooSoon) {
+      return res.status(429).json({
+        error: `Подождите ${PREDICTION_UPDATE_COOLDOWN_SEC} сек. перед повторным изменением прогноза`,
+      });
+    }
+  }
+
   const doublePicks = getUserDoublePicks(userId);
   const autoDouble =
     !hadPrediction &&
@@ -813,6 +830,9 @@ router.post('/leagues/join', authMiddleware, (req, res) => {
 
   try {
     const league = joinLeagueByCode(req.user!.id, code);
+    if (league.ownerId !== req.user!.id) {
+      recordReferralForLeagueOwner(league.ownerId, req.user!.id);
+    }
     res.json({ league });
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'Лига не найдена' });

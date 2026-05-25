@@ -1,4 +1,4 @@
-import { acceptInviteOnJoin, recordReferral } from './friends.js';
+import { acceptInviteOnJoin, recordReferral, recordReferralForLeagueOwner } from './friends.js';
 import { joinLeagueByCode } from './leagues.js';
 
 export function processStartParamForUser(userId: number, startParam: string) {
@@ -12,7 +12,12 @@ export function processStartParamForUser(userId: number, startParam: string) {
       }
     } else if (startParam.startsWith('league_')) {
       const code = startParam.slice(7).slice(0, 16);
-      if (code) joinLeagueByCode(userId, code);
+      if (code) {
+        const league = joinLeagueByCode(userId, code);
+        if (league.ownerId !== userId) {
+          recordReferralForLeagueOwner(league.ownerId, userId);
+        }
+      }
     }
   } catch {
     /* ignore */

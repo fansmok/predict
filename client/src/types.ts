@@ -325,7 +325,7 @@ export interface FriendUser {
   username: string | null;
   photoUrl: string | null;
   favoriteTeam?: Team | null;
-  status?: 'friend' | 'invited' | 'referral';
+  status?: 'friend' | 'invited' | 'referral' | 'league';
   totalPoints?: number;
   joinedAt?: string;
   isPlatinum?: boolean;

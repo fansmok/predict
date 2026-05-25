@@ -4,7 +4,7 @@ import { api } from '../api';
 import { displayName, formatPointsWord, ruPlural, pointsToneClass } from '../utils';
 import { InviteLinkActions } from '../components/InviteLinkActions';
 import { UserAvatar } from '../components/UserAvatar';
-import { IconFriends, IconCheck } from '../components/Icons';
+import { IconFriends } from '../components/Icons';
 import { CreateLeaguePromo } from '../components/CreateLeaguePromo';
 import { FriendsPlatinumBar } from '../components/FriendsPlatinumBar';
 import { PlatinumName } from '../components/PlatinumName';
@@ -21,6 +21,8 @@ function joinStatusLabel(status?: FriendUser['status']): string {
       return 'Вступил по ссылке';
     case 'friend':
       return 'Принял приглашение';
+    case 'league':
+      return 'Вступил в лигу';
     case 'invited':
       return 'Приглашение отправлено';
     default:
@@ -41,15 +43,9 @@ function formatJoinedAt(iso?: string): string | null {
   return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 }
 
-export function FriendsPage({ myId, onGoToLeaderboard, onViewUser }: Props) {
+export function FriendsPage({ onGoToLeaderboard, onViewUser }: Props) {
   const [data, setData] = useState<FriendsData | null>(null);
-  const [search, setSearch] = useState('');
-  const [results, setResults] = useState<FriendUser[]>([]);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [searching, setSearching] = useState(false);
-  const [inviting, setInviting] = useState(false);
-  const [message, setMessage] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -64,70 +60,13 @@ export function FriendsPage({ myId, onGoToLeaderboard, onViewUser }: Props) {
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (search.trim().length < 2) {
-      setResults([]);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await api.searchFriends(search);
-        const existing = new Set([
-          ...(data?.friends.map(f => f.id) ?? []),
-          ...(data?.pending.map(f => f.id) ?? []),
-          myId,
-        ]);
-        setResults(res.users.filter(u => !existing.has(u.id)));
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [search, data, myId]);
-
   const joined = data?.friends ?? [];
   const pending = data?.pending ?? [];
 
   const stats = useMemo(() => {
     const totalPoints = joined.reduce((sum, f) => sum + (f.totalPoints ?? 0), 0);
-    const byLink = joined.filter(f => f.status === 'referral').length;
-    const byInvite = joined.filter(f => f.status === 'friend').length;
-    return { totalPoints, byLink, byInvite };
+    return { totalPoints };
   }, [joined]);
-
-  const toggleSelect = (id: number) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleInviteSelected = async () => {
-    if (selected.size === 0) return;
-    setInviting(true);
-    setMessage('');
-    try {
-      const result = await api.inviteFriends([...selected]);
-      setMessage(
-        result.sent > 0
-          ? `Приглашения отправлены: ${result.sent}${result.failed ? ` · не доставлено: ${result.failed}` : ''}`
-          : 'Не удалось отправить — пользователи должны сначала запустить бота'
-      );
-      setSelected(new Set());
-      setSearch('');
-      setResults([]);
-      await load();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Ошибка');
-    } finally {
-      setInviting(false);
-    }
-  };
 
   const platinumProgress = useMemo(
     () =>
@@ -177,16 +116,6 @@ export function FriendsPage({ myId, onGoToLeaderboard, onViewUser }: Props) {
             </span>
             <span className="friends-stat-label">ОЧКИ у друзей</span>
           </div>
-          {(stats.byLink > 0 || stats.byInvite > 0) && (
-            <>
-              <div className="friends-stat-divider" />
-              <div className="friends-stat friends-stat-meta">
-                {stats.byLink > 0 && <span>{stats.byLink} по ссылке</span>}
-                {stats.byLink > 0 && stats.byInvite > 0 && <span> · </span>}
-                {stats.byInvite > 0 && <span>{stats.byInvite} по приглашению</span>}
-              </div>
-            </>
-          )}
         </div>
       )}
 
@@ -203,55 +132,6 @@ export function FriendsPage({ myId, onGoToLeaderboard, onViewUser }: Props) {
           />
         )}
       </div>
-
-      <div className="friends-search-block">
-        <label htmlFor="friends-search-input" className="sr-only">
-          Поиск пользователей по имени или username
-        </label>
-        <input
-          id="friends-search-input"
-          type="search"
-          className="friends-search"
-          placeholder="Найти по @username или имени..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          autoComplete="off"
-        />
-        {searching && <span className="friends-search-hint">Поиск...</span>}
-      </div>
-
-      {results.length > 0 && (
-        <section className="friends-section">
-          <h3>Найденные пользователи</h3>
-          <div className="friends-list">
-            {results.map(user => (
-              <FriendRow
-                key={user.id}
-                user={user}
-                selectable
-                selected={selected.has(user.id)}
-                onToggle={() => toggleSelect(user.id)}
-                onViewUser={onViewUser}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {selected.size > 0 && (
-        <div className="friends-invite-bar">
-          <button
-            type="button"
-            className="friends-invite-btn"
-            onClick={handleInviteSelected}
-            disabled={inviting}
-          >
-            {inviting ? 'Отправка...' : `Пригласить (${selected.size})`}
-          </button>
-        </div>
-      )}
-
-      {message && <div className="friends-message">{message}</div>}
 
       {joined.length > 0 && (
         <section className="friends-section">
@@ -275,11 +155,11 @@ export function FriendsPage({ myId, onGoToLeaderboard, onViewUser }: Props) {
         </section>
       )}
 
-      {joined.length === 0 && pending.length === 0 && !search && (
+      {joined.length === 0 && pending.length === 0 && (
         <div className="empty-state compact">
           <div className="icon"><IconFriends size={40} /></div>
           <h3>Пока никого нет</h3>
-          <p>Найдите друзей по username или поделитесь ссылкой-приглашением. Когда они вступят — здесь появятся их очки.</p>
+          <p>Поделитесь ссылкой-приглашением или пригласите друзей в лигу. Когда они вступят — здесь появятся их очки.</p>
         </div>
       )}
     </div>
@@ -288,17 +168,11 @@ export function FriendsPage({ myId, onGoToLeaderboard, onViewUser }: Props) {
 
 function FriendRow({
   user,
-  selectable,
-  selected,
-  onToggle,
   showPoints,
   showJoinInfo,
   onViewUser,
 }: {
   user: FriendUser;
-  selectable?: boolean;
-  selected?: boolean;
-  onToggle?: () => void;
   showPoints?: boolean;
   showJoinInfo?: boolean;
   onViewUser?: (userId: number) => void;
@@ -308,8 +182,8 @@ function FriendRow({
 
   const name = displayName(user.firstName, user.lastName);
 
-  const content = (
-    <>
+  return (
+    <button type="button" className="friend-row" onClick={() => onViewUser?.(user.id)}>
       <button
         type="button"
         className="friend-avatar-btn"
@@ -351,31 +225,6 @@ function FriendRow({
       {!showPoints && user.status === 'invited' && (
         <span className="friend-badge pending">ожидает</span>
       )}
-      {selectable && (
-        <span className={`friend-check ${selected ? 'on' : ''}`}>
-          {selected && <IconCheck size={14} />}
-        </span>
-      )}
-    </>
-  );
-
-  if (selectable) {
-    return (
-      <button
-        type="button"
-        className={`friend-row ${selected ? 'selected' : ''}`}
-        onClick={onToggle}
-        aria-pressed={selected}
-        aria-label={`${name}${selected ? ', выбран' : ', не выбран'}`}
-      >
-        {content}
-      </button>
-    );
-  }
-
-  return (
-    <button type="button" className="friend-row" onClick={() => onViewUser?.(user.id)}>
-      {content}
     </button>
   );
 }

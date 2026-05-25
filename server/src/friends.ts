@@ -10,7 +10,7 @@ export interface FriendUser {
   lastName: string | null;
   username: string | null;
   photoUrl: string | null;
-  status?: 'friend' | 'invited' | 'referral';
+  status?: 'friend' | 'invited' | 'referral' | 'league';
   totalPoints?: number;
   joinedAt?: string;
   isPlatinum?: boolean;
@@ -46,6 +46,10 @@ export function recordReferral(referrerId: number, referredId: number): boolean 
   return result.changes > 0;
 }
 
+export function recordReferralForLeagueOwner(ownerId: number, memberId: number): void {
+  recordReferral(ownerId, memberId);
+}
+
 type FriendRow = DbUser & { joined_at: string };
 
 export function getFriends(userId: number): FriendUser[] {
@@ -65,6 +69,16 @@ export function getFriends(userId: number): FriendUser[] {
     ORDER BY fi.updated_at DESC
   `).all(userId) as FriendRow[];
 
+  const leagueJoins = db.prepare(`
+    SELECT u.id, u.first_name, u.last_name, u.username, u.photo_url, MIN(lm.joined_at) as joined_at
+    FROM league_members lm
+    JOIN leagues l ON l.id = lm.league_id
+    JOIN users u ON u.id = lm.user_id
+    WHERE l.owner_id = ? AND lm.user_id != ?
+    GROUP BY u.id
+    ORDER BY joined_at DESC
+  `).all(userId, userId) as FriendRow[];
+
   const map = new Map<number, FriendUser>();
   for (const row of referrals) {
     if (row.id === userId) continue;
@@ -73,6 +87,10 @@ export function getFriends(userId: number): FriendUser[] {
   for (const row of invited) {
     if (row.id === userId || map.has(row.id)) continue;
     map.set(row.id, toFriendUser(row, 'friend', row.joined_at));
+  }
+  for (const row of leagueJoins) {
+    if (row.id === userId || map.has(row.id)) continue;
+    map.set(row.id, toFriendUser(row, 'league', row.joined_at));
   }
 
   const platinumFlags = getPlatinumFlags([...map.keys()]);

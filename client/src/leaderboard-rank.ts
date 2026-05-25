@@ -4,8 +4,8 @@ export type PlayersRankKind = 'total' | 'predictions' | 'fantasy';
 
 export const RANK_KIND_LABELS: Record<PlayersRankKind, string> = {
   total: 'Общий рейтинг',
-  predictions: 'Рейтинг прогнозистов',
-  fantasy: 'Рейтинг fantasy-команд',
+  predictions: 'Топ прогнозистов',
+  fantasy: 'Топ fantasy',
 };
 
 export function leaderPointsForKind(

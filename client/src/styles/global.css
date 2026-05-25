@@ -3649,11 +3649,45 @@ article.match-card {
 .user-avatar {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   overflow: visible;
   padding: 0;
   border: none;
   background: none;
+}
+
+.user-avatar--leader {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.user-avatar--friend {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.user-avatar--profile {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 3px solid var(--accent);
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 22px;
+  box-shadow: 0 0 20px var(--accent-glow);
 }
 
 .user-avatar-btn {
@@ -7319,7 +7353,7 @@ body.picker-open .bottom-nav {
 }
 
 .invite-link-actions--hero {
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
@@ -8695,15 +8729,12 @@ body.picker-open .bottom-nav {
 .user-profile-overlay {
   position: fixed;
   inset: 0;
+  transform: none;
   background: rgba(0, 0, 0, 0.78);
   z-index: 300;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-}
-
-.user-profile-overlay.sheet-overlay-above-nav {
-  inset: auto;
 }
 
 .user-profile-modal {
@@ -9003,15 +9034,12 @@ button.friend-row {
 .match-profile-overlay {
   position: fixed;
   inset: 0;
+  transform: none;
   background: rgba(0, 0, 0, 0.78);
   z-index: 300;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-}
-
-.match-profile-overlay.sheet-overlay-above-nav {
-  inset: auto;
 }
 
 .match-profile-modal {

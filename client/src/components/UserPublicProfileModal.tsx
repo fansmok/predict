@@ -167,7 +167,7 @@ export function UserPublicProfileModal({
 
   return (
     <ModalPortal>
-      <div className="user-profile-overlay sheet-overlay-above-nav" onClick={onClose} role="presentation">
+      <div className="sheet-overlay-above-nav" onClick={onClose} role="presentation">
         <div
           ref={dialogRef}
           className="user-profile-modal sheet-modal-above-nav"

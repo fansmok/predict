@@ -186,7 +186,7 @@ export function MatchProfileModal({ match, onClose }: Props) {
 
   return (
     <ModalPortal>
-      <div className="match-profile-overlay sheet-overlay-above-nav" onClick={onClose} role="presentation">
+      <div className="sheet-overlay-above-nav" onClick={onClose} role="presentation">
         <div
           ref={dialogRef}
           className="match-profile-modal sheet-modal-above-nav"
