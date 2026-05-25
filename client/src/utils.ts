@@ -64,7 +64,7 @@ export function formatMatchKickoffLine(iso: string): string {
   return `${formatMatchDayTitle(iso)} · ${formatTime(iso)}`;
 }
 
-export const CONSENSUS_MIN_PREDICTIONS = 3;
+export const CONSENSUS_MIN_PREDICTIONS = 1;
 
 export function hasPublicConsensus(
   consensus: { total: number } | null | undefined
@@ -220,6 +220,31 @@ export function shareTelegramLink(link: string, text: string) {
     tg.openTelegramLink(shareUrl);
   } else {
     window.open(shareUrl, '_blank');
+  }
+}
+
+export async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fallback below */
+  }
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
   }
 }
 

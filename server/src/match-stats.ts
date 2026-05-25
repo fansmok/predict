@@ -1,6 +1,6 @@
 import { db } from './db.js';
 
-export const CONSENSUS_MIN_PREDICTIONS = 3;
+export const CONSENSUS_MIN_PREDICTIONS = 1;
 
 export interface MatchConsensus {
   home: number;

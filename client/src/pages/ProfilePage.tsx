@@ -131,15 +131,6 @@ export function ProfilePage({
         </button>
       )}
 
-      {!user.isAdmin && (
-        <p className="profile-dev-hint">
-          Ваш ID: <strong>{user.id}</strong>
-          {import.meta.env.DEV
-            ? ' — для admin добавьте в ADMIN_USER_IDS в .env и перезапустите сервер.'
-            : ' — попросите организатора добавить ваш ID в ADMIN_USER_IDS на сервере.'}
-        </p>
-      )}
-
       {!user.favoriteTeam && (
         <FavoriteTeamBanner onClick={openTeamPicker} />
       )}

@@ -67,6 +67,7 @@ import {
   sliceRankedLeaderboard,
   getTotalsForUserIds,
   type RankedLeaderboardEntry,
+  filterGlobalRankedLeaderboard,
 } from './ranking.js';
 import {
   parseMatchId,
@@ -695,12 +696,14 @@ function leaderFromEntry(entry: RankedLeaderboardEntry, isPlatinum: boolean) {
 router.get('/leaderboard', authMiddleware, (req, res) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
   const kind = parseLeaderboardRankKind(req.query.kind);
-  const ranked = buildRankedLeaderboardByKind(kind);
-  const { leaders: top, myEntry, neighborhood: nbSlice } = sliceRankedLeaderboard(
+  const fullRanked = buildRankedLeaderboardByKind(kind);
+  const ranked = filterGlobalRankedLeaderboard(fullRanked, kind);
+  const { leaders: top, neighborhood: nbSlice } = sliceRankedLeaderboard(
     ranked,
     req.user!.id,
     limit
   );
+  const myEntry = fullRanked.find(e => e.id === req.user!.id) ?? null;
   const platinumMap = getPlatinumFlags(top.map(l => l.id));
 
   const leaders = withFavoriteTeams(top.map(l => leaderFromEntry(l, platinumMap.get(l.id) ?? false)));

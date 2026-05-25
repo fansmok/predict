@@ -20,6 +20,7 @@ import { TournamentTotals } from './TournamentTotals';
 import { MatchCard } from './MatchCard';
 import { DateHeader } from './DateHeader';
 import { IconBall, IconSquad, IconTrophy } from './Icons';
+import { SheetModalCloseFooter } from './SheetModalCloseFooter';
 
 interface Props {
   userId: number;
@@ -166,17 +167,22 @@ export function UserPublicProfileModal({
 
   return (
     <ModalPortal>
-      <div className="user-profile-overlay" onClick={onClose} role="presentation">
+      <div className="user-profile-overlay sheet-overlay-above-nav" onClick={onClose} role="presentation">
         <div
           ref={dialogRef}
-          className="user-profile-modal"
+          className="user-profile-modal sheet-modal-above-nav"
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           onClick={e => e.stopPropagation()}
         >
-          <div className="user-profile-handle" aria-hidden="true" />
-          <button type="button" className="user-profile-close" onClick={onClose} aria-label="Закрыть">
+          <button
+            type="button"
+            className="user-profile-handle sheet-modal-handle"
+            onClick={onClose}
+            aria-label="Свернуть"
+          />
+          <button type="button" className="user-profile-close sheet-modal-icon-close" onClick={onClose} aria-label="Закрыть">
             ✕
           </button>
 
@@ -386,6 +392,7 @@ export function UserPublicProfileModal({
               </div>
             </>
           )}
+          <SheetModalCloseFooter onClose={onClose} />
         </div>
       </div>
     </ModalPortal>

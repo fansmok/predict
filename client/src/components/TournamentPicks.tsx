@@ -147,7 +147,7 @@ export function TournamentPicks({ data, teams, players, matches, embedded, hideH
             {embedded ? 'Чемпионат мира' : 'Прогнозы на турнир'}
           </h2>
           <p className="tournament-subtitle">
-            {locked ? 'Приём закрыт — турнир уже начался' : embedded ? 'Победитель · призёры · бомбардир · до 80 ОЧКИ' : 'До старта ЧМ-2026 · до 80 ОЧКИ'}
+            {locked ? 'Приём закрыт — турнир уже начался' : 'Победитель · призёры · бомбардир'}
           </p>
         </div>
         <div className="tournament-progress" aria-label={`Заполнено ${filledCount} из 4`}>

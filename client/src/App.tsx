@@ -14,7 +14,7 @@ import { CreateLeagueModal } from './components/CreateLeagueModal';
 import { RulesPage } from './pages/RulesPage';
 import { HeaderChip } from './components/HeaderChip';
 import { TabPanel } from './components/TabPanel';
-import { isTournamentComplete, countPendingPredictions, isTournamentPicksLocked, WC_OPENING_KICKOFF } from './utils';
+import { isTournamentComplete, countPendingPredictions, isTournamentPicksLocked, WC_OPENING_KICKOFF, getStartParam } from './utils';
 import wcLogo from './assets/wc-2026.jpg';
 
 const TAB_TITLES: Record<Tab, string> = {
@@ -71,6 +71,7 @@ export default function App() {
   const [leagueToOpenId, setLeagueToOpenId] = useState<number | null>(null);
   const [leaderboardResetKey, setLeaderboardResetKey] = useState(0);
   const contentRef = useRef<HTMLElement>(null);
+  const leagueInviteHandled = useRef(false);
   /** Вкладки, уже отрисованные хотя бы раз — не размонтируем при переключении. */
   const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set(['matches']));
 
@@ -155,6 +156,31 @@ export default function App() {
   }, [loadData]);
 
   useEffect(() => {
+    if (loading || leagueInviteHandled.current) return;
+    const startParam = getStartParam();
+    if (!startParam.startsWith('league_')) return;
+    const code = startParam.slice(7).slice(0, 16);
+    if (!code) return;
+
+    leagueInviteHandled.current = true;
+    api
+      .joinLeague(code)
+      .then(res => {
+        setLeagueToOpenId(res.league.id);
+        setTab('leaderboard');
+        return api.getLeagues();
+      })
+      .then(res => {
+        if (!res) return;
+        setLeagues(res.leagues);
+        setCanCreateLeague(res.canCreateLeague);
+        setOwnedLeagueCount(res.ownedLeagueCount);
+        setMaxOwnedLeagues(res.maxOwnedLeagues);
+      })
+      .catch(() => {});
+  }, [loading]);
+
+  useEffect(() => {
     if (loading) return;
     setMountedTabs(prev => {
       const next = new Set(prev);
@@ -174,12 +200,13 @@ export default function App() {
   }, [tab]);
 
   useEffect(() => {
-    contentRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    const el = contentRef.current;
+    if (!el) return;
+    el.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
   }, [tab]);
 
   const handleTabChange = useCallback((next: Tab) => {
     setShowRules(false);
-    contentRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     if (next === 'leaderboard') {
       setLeaderboardResetKey(k => k + 1);
     }

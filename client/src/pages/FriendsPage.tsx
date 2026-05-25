@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { FriendsData, FriendUser } from '../types';
 import { api } from '../api';
-import { displayName, shareTelegramLink, formatPointsWord, ruPlural, pointsToneClass } from '../utils';
+import { displayName, formatPointsWord, ruPlural, pointsToneClass } from '../utils';
+import { InviteLinkActions } from '../components/InviteLinkActions';
 import { UserAvatar } from '../components/UserAvatar';
-import { IconFriends, IconLink, IconCheck } from '../components/Icons';
+import { IconFriends, IconCheck } from '../components/Icons';
 import { CreateLeaguePromo } from '../components/CreateLeaguePromo';
 import { FriendsPlatinumBar } from '../components/FriendsPlatinumBar';
 import { PlatinumName } from '../components/PlatinumName';
@@ -128,14 +129,6 @@ export function FriendsPage({ myId, onGoToLeaderboard, onViewUser }: Props) {
     }
   };
 
-  const handleShareLink = () => {
-    if (!data?.inviteLink) return;
-    shareTelegramLink(
-      data.inviteLink,
-      'Присоединяйся к Лиге Прогнозов — ЧМ-2026!'
-    );
-  };
-
   const platinumProgress = useMemo(
     () =>
       data?.platinum ?? {
@@ -202,10 +195,13 @@ export function FriendsPage({ myId, onGoToLeaderboard, onViewUser }: Props) {
       <FriendsPlatinumBar progress={platinumProgress} />
 
       <div className="friends-actions">
-        <button type="button" className="friends-share-btn" onClick={handleShareLink}>
-          <IconLink size={18} />
-          Поделиться ссылкой
-        </button>
+        {data?.inviteLink && (
+          <InviteLinkActions
+            link={data.inviteLink}
+            shareText="Присоединяйся к Лиге Прогнозов — ЧМ-2026!"
+            shareLabel="Поделиться"
+          />
+        )}
       </div>
 
       <div className="friends-search-block">

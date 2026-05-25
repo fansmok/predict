@@ -15,6 +15,7 @@ import { useDialogA11y } from '../hooks/useDialogA11y';
 import { MatchConsensusBar } from './MatchConsensusBar';
 import { UserAvatar } from './UserAvatar';
 import { IconBall, IconCheck, IconPass, IconRedCard, IconShield, IconTarget } from './Icons';
+import { SheetModalCloseFooter } from './SheetModalCloseFooter';
 
 function rankEmoji(rank: number): string {
   if (rank === 1) return '🥇';
@@ -185,17 +186,22 @@ export function MatchProfileModal({ match, onClose }: Props) {
 
   return (
     <ModalPortal>
-      <div className="match-profile-overlay" onClick={onClose} role="presentation">
+      <div className="match-profile-overlay sheet-overlay-above-nav" onClick={onClose} role="presentation">
         <div
           ref={dialogRef}
-          className="match-profile-modal"
+          className="match-profile-modal sheet-modal-above-nav"
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           onClick={e => e.stopPropagation()}
         >
-          <div className="match-profile-handle" aria-hidden="true" />
-          <button type="button" className="match-profile-close" onClick={onClose} aria-label="Закрыть">
+          <button
+            type="button"
+            className="match-profile-handle sheet-modal-handle"
+            onClick={onClose}
+            aria-label="Свернуть"
+          />
+          <button type="button" className="match-profile-close sheet-modal-icon-close" onClick={onClose} aria-label="Закрыть">
             ✕
           </button>
 
@@ -420,6 +426,8 @@ export function MatchProfileModal({ match, onClose }: Props) {
           {!loading && !profile && !error && hasActual && (
             <p className="match-profile-empty match-profile-empty--standalone">Профиль недоступен</p>
           )}
+
+          <SheetModalCloseFooter onClose={onClose} />
         </div>
       </div>
     </ModalPortal>

@@ -3,7 +3,6 @@ import { useDialogA11y } from '../hooks/useDialogA11y';
 import { Leader, LeagueSummary, LeaderboardMyRank, UserStats } from '../types';
 import {
   displayName,
-  shareTelegramLink,
   formatPredictionStats,
   formatParticipants,
   formatPoints,
@@ -18,7 +17,8 @@ import {
   prepareLeadersForRankKind,
 } from '../leaderboard-rank';
 import { api } from '../api';
-import { IconTrophy, IconFriends, IconSquad, IconLink } from '../components/Icons';
+import { IconTrophy, IconFriends, IconSquad } from '../components/Icons';
+import { InviteLinkActions } from '../components/InviteLinkActions';
 import { LeagueEmoji } from '../components/LeagueEmoji';
 import { ModalPortal } from '../components/ModalPortal';
 import { CreateLeaguePromo } from '../components/CreateLeaguePromo';
@@ -187,18 +187,22 @@ function LeaderList({
           }
 
           return (
-            <button
+            <div
               key={leader.id}
-              type="button"
               className={`leader-card ${topClass} ${isMe ? 'is-me' : ''}`}
-              onClick={() => {
-                window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-                onViewUser(leader.id);
-              }}
-              aria-label={`Профиль: ${displayName(leader.firstName, leader.lastName)}`}
             >
-              {cardBody}
-            </button>
+              <button
+                type="button"
+                className="leader-card-main"
+                onClick={() => {
+                  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+                  onViewUser(leader.id);
+                }}
+                aria-label={`Профиль: ${displayName(leader.firstName, leader.lastName)}`}
+              >
+                {cardBody}
+              </button>
+            </div>
           );
         })}
       </div>
@@ -254,11 +258,9 @@ const RANK_KIND_DESC: Record<PlayersRankKind, string> = {
 function LeagueDrillHero({
   league,
   myLeagueRank,
-  onInvite,
 }: {
   league: LeagueSummary;
   myLeagueRank?: number;
-  onInvite: () => void;
 }) {
   return (
     <div className="lb-drill-hero">
@@ -278,10 +280,12 @@ function LeagueDrillHero({
           {leagueAvgLabel(league.avgPoints) && <> · {leagueAvgLabel(league.avgPoints)}</>}
         </p>
         {league.inviteLink && (
-          <button type="button" className="lb-drill-invite" onClick={onInvite}>
-            <IconLink size={18} aria-hidden="true" />
-            <span>Пригласить в лигу</span>
-          </button>
+          <InviteLinkActions
+            link={league.inviteLink}
+            shareText={`Вступай в лигу «${league.name}»!`}
+            shareLabel="Пригласить в лигу"
+            variant="hero"
+          />
         )}
       </div>
     </div>
@@ -581,12 +585,6 @@ export function LeaderboardPage({
     }
   };
 
-  const shareLeagueLink = () => {
-    const link = createdLink || activeLeague?.inviteLink;
-    if (!link) return;
-    shareTelegramLink(link, `Вступай в лигу «${activeLeague?.name ?? 'прогнозистов'}»!`);
-  };
-
   const rawLeaders = leagueDrillId != null ? leagueLeaders : globalLeaders;
   const displayLeaders = useMemo(
     () => prepareLeadersForRankKind(rawLeaders.map(normalizeLeader)),
@@ -628,7 +626,7 @@ export function LeaderboardPage({
   const neighborhoodLabel =
     leagueDrillId != null ? 'Ваше место в лиге' : 'Ваше место в рейтинге';
 
-  const hasOwnLeagues = leagues.some(l => l.isOwner);
+  const hasMemberLeagues = leagues.length > 0;
 
   const isLeagueMemberView = activeLeague?.isMember === true;
   const isLeagueOwner = activeLeague?.isOwner === true && isLeagueMemberView;
@@ -750,6 +748,7 @@ export function LeaderboardPage({
 
   return (
     <>
+      <div className="leaderboard-page">
       {leagueDrillId != null ? (
         <div className="lb-drill">
           <button type="button" className="lb-drill-back" onClick={closeLeagueDrill}>
@@ -761,12 +760,11 @@ export function LeaderboardPage({
               league={{
                 ...drillLeague,
                 emoji: activeLeague?.emoji ?? drillLeague.emoji,
-                inviteLink: activeLeague?.inviteLink,
+                inviteLink: activeLeague?.inviteLink ?? createdLink ?? drillLeague.inviteLink,
                 avgPoints: activeLeague?.avgPoints ?? drillLeague.avgPoints,
                 memberCount: activeLeague?.memberCount ?? drillLeague.memberCount,
               }}
               myLeagueRank={myLeagueRankInDrill}
-              onInvite={shareLeagueLink}
             />
           )}
 
@@ -842,9 +840,9 @@ export function LeaderboardPage({
 
       {mode === 'myLeagues' && (
         <>
-          {!hasOwnLeagues ? (
+          {!hasMemberLeagues ? (
             <p className="lb-leagues-empty-hint lb-leagues-empty-hint--padded">
-              Или вступите в лигу друга по ссылке-приглашению
+              Вступите в лигу друга по ссылке-приглашению — она появится здесь
             </p>
           ) : (
             <LeagueBrowseList leagues={leagues} onOpen={openLeagueDrill} />
@@ -853,6 +851,7 @@ export function LeaderboardPage({
       )}
         </>
       )}
+      </div>
 
       <CreateLeagueModal
         open={showCreate}

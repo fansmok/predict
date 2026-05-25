@@ -138,6 +138,21 @@ export function assignLeaderRanks(entries: LeaderboardEntry[]): RankedLeaderboar
   return assignLeaderRanksForKind(entries, 'total');
 }
 
+export function pointsForRankKind(entry: LeaderboardEntry, kind: LeaderboardRankKind): number {
+  if (kind === 'predictions') return entry.matchPoints;
+  if (kind === 'fantasy') return entry.squadPoints;
+  return entry.totalPoints;
+}
+
+/** Глобальный рейтинг: без участников с нулём очков в выбранной категории. */
+export function filterGlobalRankedLeaderboard(
+  ranked: RankedLeaderboardEntry[],
+  kind: LeaderboardRankKind
+): RankedLeaderboardEntry[] {
+  const filtered = ranked.filter(e => pointsForRankKind(e, kind) > 0);
+  return assignLeaderRanksForKind(filtered, kind);
+}
+
 export interface LeaderboardSlice {
   leaders: RankedLeaderboardEntry[];
   myEntry: RankedLeaderboardEntry | null;
