@@ -255,9 +255,22 @@ function migrateToV6(): void {
   console.log(`[db] Schema migrated to v${SCHEMA_VERSION}`);
 }
 
+/** БД создана актуальным initDatabase(), а не legacy-схемой до v2. */
+function isFreshModernInstall(): boolean {
+  const matchCols = db.prepare(`PRAGMA table_info(matches)`).all() as Array<{ name: string }>;
+  return matchCols.some(c => c.name === 'external_fixture_id');
+}
+
 export function runSchemaMigrations(): void {
   const version = getSchemaVersion();
-  if (version < 2) migrateToV2();
+  if (version < 2) {
+    if (isFreshModernInstall()) {
+      setSchemaVersion(2);
+      console.log('[db] Fresh install — skip legacy v2 migration');
+    } else {
+      migrateToV2();
+    }
+  }
   if (getSchemaVersion() < 3) migrateToV3();
   if (getSchemaVersion() < 4) migrateToV4();
   if (getSchemaVersion() < 5) migrateToV5();
