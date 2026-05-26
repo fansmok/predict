@@ -26,6 +26,7 @@ import { CreateLeagueModal } from '../components/CreateLeagueModal';
 import { PlatinumName } from '../components/PlatinumName';
 import { LeaderPointsStrip } from '../components/LeaderPointsStrip';
 import { UserAvatar } from '../components/UserAvatar';
+import { AdminIdBadge } from '../components/AdminIdBadge';
 
 type LbMode = 'players' | 'leagues' | 'myLeagues';
 
@@ -47,6 +48,7 @@ interface Props {
   isActive?: boolean;
   refreshKey?: number;
   onViewUser: (userId: number) => void;
+  isAdmin?: boolean;
 }
 
 function rankEmoji(rank: number): string {
@@ -75,6 +77,7 @@ function LeaderList({
   onViewUser,
   leagueOwnerId,
   onRequestRemove,
+  isAdmin,
 }: {
   leaders: Leader[];
   myId: number;
@@ -83,6 +86,7 @@ function LeaderList({
   onViewUser: (userId: number) => void;
   leagueOwnerId?: number;
   onRequestRemove?: (leader: Leader) => void;
+  isAdmin?: boolean;
 }) {
   const list = [...leaders].sort((a, b) => a.rank - b.rank);
 
@@ -132,6 +136,7 @@ function LeaderList({
                   </PlatinumName>
                   {isMe && <span className="leader-you">вы</span>}
                 </div>
+                {isAdmin && <AdminIdBadge id={leader.id} label="User" className="admin-id-badge--inline" />}
                 {rankKind === 'total' ? (
                   <>
                     <div className="leader-meta">{formatPredictionStats(leader)}</div>
@@ -261,9 +266,11 @@ const RANK_KIND_DESC: Record<PlayersRankKind, string> = {
 function LeagueDrillHero({
   league,
   myLeagueRank,
+  isAdmin,
 }: {
   league: LeagueSummary;
   myLeagueRank?: number;
+  isAdmin?: boolean;
 }) {
   return (
     <div className="lb-drill-hero">
@@ -278,6 +285,7 @@ function LeagueDrillHero({
           )}
         </div>
         <h2 className="lb-drill-hero-title">{league.name}</h2>
+        {isAdmin && <AdminIdBadge id={league.id} label="Лига" />}
         <p className="lb-drill-hero-meta">
           {formatParticipants(league.memberCount)}
           {leagueAvgLabel(league.avgPoints) && <> · {leagueAvgLabel(league.avgPoints)}</>}
@@ -353,9 +361,11 @@ function RemoveMemberConfirmModal({
 function LeagueBrowseList({
   leagues,
   onOpen,
+  isAdmin,
 }: {
   leagues: LeagueSummary[];
   onOpen: (id: number) => void;
+  isAdmin?: boolean;
 }) {
   return (
     <ul className="lb-league-browse-list">
@@ -368,6 +378,8 @@ function LeagueBrowseList({
               <span className="lb-league-browse-meta">
                 {formatParticipants(league.memberCount)}
                 {leagueAvgLabel(league.avgPoints) && <> · {leagueAvgLabel(league.avgPoints)}</>}
+                {isAdmin && <> · </>}
+                {isAdmin && <AdminIdBadge id={league.id} label="Лига" className="admin-id-badge--inline" />}
               </span>
             </div>
             <span className="lb-league-browse-action" aria-hidden="true">
@@ -383,9 +395,11 @@ function LeagueBrowseList({
 function LeagueRankingList({
   leagues,
   onOpen,
+  isAdmin,
 }: {
   leagues: LeagueSummary[];
   onOpen: (id: number) => void;
+  isAdmin?: boolean;
 }) {
   if (leagues.length === 0) {
     return (
@@ -415,6 +429,8 @@ function LeagueRankingList({
             <span className="lb-league-rank-name">{league.name}</span>
             <span className="lb-league-rank-meta">
               {formatParticipants(league.memberCount)} · {formatPoints(league.totalPoints ?? 0)} всего
+              {isAdmin && <> · </>}
+              {isAdmin && <AdminIdBadge id={league.id} label="Лига" className="admin-id-badge--inline" />}
             </span>
           </div>
           <div className="lb-league-rank-tail">
@@ -447,6 +463,7 @@ export function LeaderboardPage({
   isActive = true,
   refreshKey = 0,
   onViewUser,
+  isAdmin = false,
 }: Props) {
   const [mode, setMode] = useState<LbMode>('players');
   const [rankKind, setRankKind] = useState<PlayersRankKind>('total');
@@ -690,6 +707,7 @@ export function LeaderboardPage({
           maxPoints={maxPoints}
           rankKind={rankKind}
           onViewUser={onViewUser}
+          isAdmin={isAdmin}
           leagueOwnerId={leagueDrillId != null && isLeagueOwner ? leagueOwnerId : undefined}
           onRequestRemove={
             leagueDrillId != null && isLeagueOwner
@@ -709,6 +727,7 @@ export function LeaderboardPage({
               maxPoints={maxPoints}
               rankKind={rankKind}
               onViewUser={onViewUser}
+              isAdmin={isAdmin}
               leagueOwnerId={isLeagueOwner ? leagueOwnerId : undefined}
               onRequestRemove={
                 isLeagueOwner
@@ -787,6 +806,7 @@ export function LeaderboardPage({
                 memberCount: activeLeague?.memberCount ?? drillLeague.memberCount,
               }}
               myLeagueRank={myLeagueRankInDrill}
+              isAdmin={isAdmin}
             />
           )}
 
@@ -856,7 +876,7 @@ export function LeaderboardPage({
               лиги можно посмотреть; вступить — только по приглашению.
             </p>
           </div>
-          <LeagueRankingList leagues={leaguesRanking} onOpen={openLeagueDrill} />
+          <LeagueRankingList leagues={leaguesRanking} onOpen={openLeagueDrill} isAdmin={isAdmin} />
         </>
       )}
 
@@ -867,7 +887,7 @@ export function LeaderboardPage({
               Вступите в лигу друга по ссылке-приглашению — она появится здесь
             </p>
           ) : (
-            <LeagueBrowseList leagues={leagues} onOpen={openLeagueDrill} />
+            <LeagueBrowseList leagues={leagues} onOpen={openLeagueDrill} isAdmin={isAdmin} />
           )}
         </>
       )}

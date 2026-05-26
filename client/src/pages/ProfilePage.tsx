@@ -8,6 +8,7 @@ import { TournamentTotals } from '../components/TournamentTotals';
 import { PlatinumName } from '../components/PlatinumName';
 import { TournamentPicks } from '../components/TournamentPicks';
 import { UserAvatar } from '../components/UserAvatar';
+import { AdminIdBadge } from '../components/AdminIdBadge';
 import { FavoriteTeamBanner, FavoriteTeamPicker } from '../components/FavoriteTeamPicker';
 
 interface Props {
@@ -114,6 +115,7 @@ export function ProfilePage({
                 {displayName(user.first_name, user.last_name)}
               </PlatinumName>
             </h2>
+            {user.isAdmin && <AdminIdBadge id={user.id} label="User" />}
           </div>
           <div className="profile-hero-points">
             <span className={`profile-hero-points-value ${pointsToneClass(stats.totalPoints)}`}>

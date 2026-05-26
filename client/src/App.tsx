@@ -501,6 +501,7 @@ export default function App() {
           <TabPanel tab="friends" activeTab={tab}>
             <FriendsPage
               myId={user.id}
+              isAdmin={user.isAdmin}
               isActive={tab === 'friends'}
               refreshKey={socialRefreshKey}
               onGoToLeaderboard={() => setTab('leaderboard')}
@@ -513,6 +514,7 @@ export default function App() {
             <LeaderboardPage
               globalLeaders={leaders}
               myId={user.id}
+              isAdmin={user.isAdmin}
               myRank={stats.rank}
               myPoints={stats.totalPoints}
               stats={stats}
@@ -584,6 +586,7 @@ export default function App() {
         <UserPublicProfileModal
           userId={viewUserId}
           myId={user?.id}
+          isAdmin={user?.isAdmin}
           tournamentTeams={tournamentTeams}
           tournamentPlayers={tournamentPlayers}
           onClose={() => setViewUserId(null)}

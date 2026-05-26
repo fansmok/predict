@@ -4,6 +4,7 @@ import { api } from '../api';
 import { displayName, formatPointsWord, ruPlural, pointsToneClass } from '../utils';
 import { InviteLinkActions } from '../components/InviteLinkActions';
 import { UserAvatar } from '../components/UserAvatar';
+import { AdminIdBadge } from '../components/AdminIdBadge';
 import { IconFriends } from '../components/Icons';
 import { CreateLeaguePromo } from '../components/CreateLeaguePromo';
 import { FriendsPlatinumBar } from '../components/FriendsPlatinumBar';
@@ -13,6 +14,7 @@ interface Props {
   myId: number;
   isActive?: boolean;
   refreshKey?: number;
+  isAdmin?: boolean;
   onGoToLeaderboard: () => void;
   onViewUser: (userId: number) => void;
 }
@@ -45,7 +47,7 @@ function formatJoinedAt(iso?: string): string | null {
   return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 }
 
-export function FriendsPage({ isActive = true, refreshKey = 0, onGoToLeaderboard, onViewUser }: Props) {
+export function FriendsPage({ isActive = true, refreshKey = 0, isAdmin = false, onGoToLeaderboard, onViewUser }: Props) {
   const [data, setData] = useState<FriendsData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -150,7 +152,7 @@ export function FriendsPage({ isActive = true, refreshKey = 0, onGoToLeaderboard
           <h3>Вступили · {joined.length}</h3>
           <div className="friends-list">
             {joined.map(user => (
-              <FriendRow key={user.id} user={user} showPoints showJoinInfo onViewUser={onViewUser} />
+              <FriendRow key={user.id} user={user} showPoints showJoinInfo isAdmin={isAdmin} onViewUser={onViewUser} />
             ))}
           </div>
         </section>
@@ -161,7 +163,7 @@ export function FriendsPage({ isActive = true, refreshKey = 0, onGoToLeaderboard
           <h3>Ожидают ответ · {pending.length}</h3>
           <div className="friends-list">
             {pending.map(user => (
-              <FriendRow key={user.id} user={user} showJoinInfo onViewUser={onViewUser} />
+              <FriendRow key={user.id} user={user} showJoinInfo isAdmin={isAdmin} onViewUser={onViewUser} />
             ))}
           </div>
         </section>
@@ -182,11 +184,13 @@ function FriendRow({
   user,
   showPoints,
   showJoinInfo,
+  isAdmin,
   onViewUser,
 }: {
   user: FriendUser;
   showPoints?: boolean;
   showJoinInfo?: boolean;
+  isAdmin?: boolean;
   onViewUser?: (userId: number) => void;
 }) {
   const joinedLabel = showJoinInfo ? joinStatusLabel(user.status) : '';
@@ -224,6 +228,7 @@ function FriendRow({
             {joinedWhen && user.status !== 'invited' ? ` · ${joinedWhen}` : ''}
           </span>
         ) : null}
+        {isAdmin && <AdminIdBadge id={user.id} label="User" className="admin-id-badge--inline" />}
       </div>
       {showPoints && (
         <div className="friend-points">

@@ -11,6 +11,7 @@ import {
 import { ModalPortal } from './ModalPortal';
 import { useDialogA11y } from '../hooks/useDialogA11y';
 import { UserAvatar } from './UserAvatar';
+import { AdminIdBadge } from './AdminIdBadge';
 import { PlatinumName } from './PlatinumName';
 import { MatchPredictionsBreakdown } from './MatchPredictionsBreakdown';
 import { FantasyPitch } from './FantasyPitch';
@@ -25,6 +26,7 @@ import { SheetModalCloseFooter } from './SheetModalCloseFooter';
 interface Props {
   userId: number;
   myId?: number;
+  isAdmin?: boolean;
   tournamentTeams: TournamentOption[];
   tournamentPlayers: TournamentOption[];
   onClose: () => void;
@@ -108,6 +110,7 @@ function tabBadge(tab: ProfileTab, profile: PublicUserProfile): string {
 export function UserPublicProfileModal({
   userId,
   myId,
+  isAdmin = false,
   tournamentTeams,
   tournamentPlayers,
   onClose,
@@ -218,6 +221,7 @@ export function UserPublicProfileModal({
                       </PlatinumName>
                       {isMe && <span className="leader-you">вы</span>}
                     </h2>
+                    {isAdmin && <AdminIdBadge id={profile.user.id} label="User" />}
                     {profile.user.favoriteTeam && (
                       <p className="user-profile-fav-team">
                         Болеет за {profile.user.favoriteTeam.name}

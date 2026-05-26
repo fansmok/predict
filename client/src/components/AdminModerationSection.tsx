@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { AdminIdBadge } from './AdminIdBadge';
+import type { LeagueSummary } from '../types';
 
 interface Props {
   onChanged: () => Promise<void>;
@@ -10,6 +12,11 @@ export function AdminModerationSection({ onChanged }: Props) {
   const [userId, setUserId] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [leagues, setLeagues] = useState<LeagueSummary[]>([]);
+
+  useEffect(() => {
+    void api.getLeagues().then(res => setLeagues(res.leagues)).catch(() => {});
+  }, []);
 
   const handleDeleteLeague = async () => {
     const id = parseInt(leagueId.trim(), 10);
@@ -26,6 +33,7 @@ export function AdminModerationSection({ onChanged }: Props) {
       setMessage({ ok: true, text: `Лига «${res.name}» удалена` });
       setLeagueId('');
       await onChanged();
+      void api.getLeagues().then(res => setLeagues(res.leagues)).catch(() => {});
     } catch (e) {
       setMessage({ ok: false, text: e instanceof Error ? e.message : 'Ошибка удаления лиги' });
     } finally {
@@ -66,6 +74,20 @@ export function AdminModerationSection({ onChanged }: Props) {
       {message && (
         <div className={`admin-message ${message.ok ? 'ok' : 'err'}`} role={message.ok ? 'status' : 'alert'}>
           {message.text}
+        </div>
+      )}
+
+      {leagues.length > 0 && (
+        <div className="admin-moderation-block admin-moderation-ref">
+          <h4>Справочник лиг</h4>
+          <ul className="admin-moderation-ref-list">
+            {leagues.map(l => (
+              <li key={l.id}>
+                <span className="admin-moderation-ref-name">{l.name}</span>
+                <AdminIdBadge id={l.id} label="Лига" className="admin-id-badge--inline" />
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
