@@ -294,26 +294,53 @@ bot.callbackQuery(/^announce_ok:(.+)$/, async ctx => {
   await ctx.answerCallbackQuery({ text: 'Рассылка началась…' });
   await ctx.editMessageText('⏳ Рассылка… Это может занять минуту.');
 
-  const result = await apiCall<{ success: boolean; sent: number; failed: number; total: number }>(
-    '/announce',
-    {
-      method: 'POST',
-      body: JSON.stringify({ adminId: from.id, text }),
-    }
+  const targets = await apiCall<{ userIds: number[] }>(
+    `/announce-targets?adminId=${from.id}`
   );
 
-  if (!result) {
-    await ctx.editMessageText('❌ Не удалось выполнить рассылку (ошибка сервера).');
+  if (!targets) {
+    await ctx.editMessageText('❌ Не удалось получить список пользователей (ошибка сервера).');
     return;
   }
 
-  await ctx.editMessageText(
+  const body = `📢 Объявление\n\n${text}`;
+  let sent = 0;
+  let failed = 0;
+  let sampleError = '';
+
+  for (let i = 0; i < targets.userIds.length; i++) {
+    const userId = targets.userIds[i];
+    try {
+      await bot.api.sendMessage(userId, body, {
+        reply_markup: appKeyboard(),
+      });
+      sent++;
+    } catch (e) {
+      failed++;
+      if (!sampleError && e && typeof e === 'object' && 'description' in e) {
+        sampleError = String((e as { description: string }).description);
+      }
+    }
+    if (i < targets.userIds.length - 1) {
+      await new Promise(r => setTimeout(r, 50));
+    }
+  }
+
+  let report =
     `✅ *Рассылка завершена*\n\n` +
-      `Всего в базе: *${result.total}*\n` +
-      `Доставлено: *${result.sent}*\n` +
-      `Не доставлено: *${result.failed}*`,
-    { parse_mode: 'Markdown' }
-  );
+    `Всего в базе: *${targets.userIds.length}*\n` +
+    `Доставлено: *${sent}*\n` +
+    `Не доставлено: *${failed}*`;
+
+  if (failed > 0) {
+    report +=
+      `\n\n_Частая причина: человек заходил только через приложение и не нажимал /start в боте._`;
+    if (sampleError) {
+      report += `\n\nПример ошибки: \`${sampleError.replace(/`/g, "'")}\``;
+    }
+  }
+
+  await ctx.editMessageText(report, { parse_mode: 'Markdown' });
 });
 
 bot.callbackQuery('announce_cancel', async ctx => {

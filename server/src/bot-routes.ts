@@ -6,6 +6,7 @@ import {
   getBotTodayMatches,
   getBotTopLeaders,
   broadcastAnnouncement,
+  getAllRegisteredUserIds,
 } from './bot-api.js';
 import { isAdminUser, logAdminAction } from './admins.js';
 
@@ -74,6 +75,14 @@ router.get('/today/:telegramId', (req, res) => {
 router.get('/leaders', (req, res) => {
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '5'), 10) || 5, 1), 20);
   res.json({ leaders: getBotTopLeaders(limit) });
+});
+
+router.get('/announce-targets', (req, res) => {
+  const adminId = parseTelegramId(req.query.adminId);
+  if (adminId == null || !isAdminUser(adminId)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  res.json({ userIds: getAllRegisteredUserIds() });
 });
 
 router.post('/announce', async (req, res) => {

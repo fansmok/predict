@@ -42,13 +42,44 @@ export function buildLeagueInviteLink(code: string, inviterId?: number): string 
   return buildTelegramMiniAppLink(buildLeagueStartParam(code, inviterId));
 }
 
-export async function sendTelegramMessage(
+export type TelegramSendResult = { ok: true } | { ok: false; error: string };
+
+function canUseWebAppButton(url: string): boolean {
+  try {
+    return new URL(url).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function buildOpenAppLink(startParam?: string): string {
+  const bot = getBotUsername();
+  const shortName = getWebAppShortName();
+  if (shortName && startParam) {
+    return `https://t.me/${bot}/${shortName}?startapp=${encodeURIComponent(startParam)}`;
+  }
+  if (shortName) return `https://t.me/${bot}/${shortName}`;
+  return `https://t.me/${bot}`;
+}
+
+function buildReplyMarkup(
+  buttonText: string,
+  buttonUrl: string
+): { inline_keyboard: Array<Array<{ text: string; web_app?: { url: string }; url?: string }>> } | undefined {
+  if (canUseWebAppButton(buttonUrl)) {
+    return { inline_keyboard: [[{ text: buttonText, web_app: { url: buttonUrl } }]] };
+  }
+  return { inline_keyboard: [[{ text: buttonText, url: buildOpenAppLink() }]] };
+}
+
+async function callSendMessage(
   chatId: number,
   text: string,
-  buttonText = '🏆 Открыть Лигу Прогнозов',
-  buttonUrl = WEBAPP_URL
-): Promise<boolean> {
-  if (!BOT_TOKEN || BOT_TOKEN === 'your_telegram_bot_token') return false;
+  replyMarkup?: ReturnType<typeof buildReplyMarkup>
+): Promise<TelegramSendResult> {
+  if (!BOT_TOKEN || BOT_TOKEN === 'your_telegram_bot_token') {
+    return { ok: false, error: 'BOT_TOKEN не задан на сервере' };
+  }
 
   try {
     const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -58,16 +89,41 @@ export async function sendTelegramMessage(
         chat_id: chatId,
         text,
         parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [[{ text: buttonText, web_app: { url: buttonUrl } }]],
-        },
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
       }),
     });
-    const data = await res.json() as { ok: boolean };
-    return data.ok;
-  } catch {
-    return false;
+    const data = (await res.json()) as { ok: boolean; description?: string };
+    if (data.ok) return { ok: true };
+    const error = data.description ?? `HTTP ${res.status}`;
+    console.error(`[telegram] sendMessage ${chatId}: ${error}`);
+    return { ok: false, error };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : 'network error';
+    console.error(`[telegram] sendMessage ${chatId}:`, error);
+    return { ok: false, error };
   }
+}
+
+export async function sendTelegramMessage(
+  chatId: number,
+  text: string,
+  buttonText = '🏆 Открыть Лигу Прогнозов',
+  buttonUrl = WEBAPP_URL
+): Promise<boolean> {
+  const markup = buildReplyMarkup(buttonText, buttonUrl);
+  let result = await callSendMessage(chatId, text, markup);
+
+  if (!result.ok && markup?.inline_keyboard[0]?.[0]?.web_app) {
+    result = await callSendMessage(chatId, text, {
+      inline_keyboard: [[{ text: buttonText, url: buildOpenAppLink() }]],
+    });
+  }
+
+  if (!result.ok && markup) {
+    result = await callSendMessage(chatId, text);
+  }
+
+  return result.ok;
 }
 
 function buildInviteText(inviterName: string): string {

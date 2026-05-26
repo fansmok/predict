@@ -135,6 +135,7 @@ export async function broadcastAnnouncement(text: string): Promise<{
   sent: number;
   failed: number;
   total: number;
+  sampleError?: string;
 }> {
   const trimmed = text.trim();
   if (!trimmed || trimmed.length > ANNOUNCE_MAX_LENGTH) {
@@ -144,16 +145,22 @@ export async function broadcastAnnouncement(text: string): Promise<{
   const userIds = getAllRegisteredUserIds();
   let sent = 0;
   let failed = 0;
+  let sampleError: string | undefined;
 
   for (let i = 0; i < userIds.length; i++) {
     const ok = await sendAnnouncementMessage(userIds[i], trimmed);
     if (ok) sent++;
-    else failed++;
+    else {
+      failed++;
+      if (!sampleError) {
+        sampleError = 'не удалось доставить (часто: пользователь не нажимал /start в боте)';
+      }
+    }
 
     if (i < userIds.length - 1) {
       await sleep(ANNOUNCE_DELAY_MS);
     }
   }
 
-  return { sent, failed, total: userIds.length };
+  return { sent, failed, total: userIds.length, sampleError: failed > 0 ? sampleError : undefined };
 }
