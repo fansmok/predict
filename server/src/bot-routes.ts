@@ -7,6 +7,7 @@ import {
   getBotTopLeaders,
   broadcastAnnouncement,
   getAllRegisteredUserIds,
+  getLeagueInvitePreview,
 } from './bot-api.js';
 import { isAdminUser, logAdminAction } from './admins.js';
 
@@ -75,6 +76,15 @@ router.get('/today/:telegramId', (req, res) => {
 router.get('/leaders', (req, res) => {
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '5'), 10) || 5, 1), 20);
   res.json({ leaders: getBotTopLeaders(limit) });
+});
+
+router.get('/league-invite', (req, res) => {
+  const startParam = typeof req.query.startParam === 'string' ? req.query.startParam.slice(0, 256) : '';
+  if (!startParam) return res.status(400).json({ error: 'startParam required' });
+
+  const preview = getLeagueInvitePreview(startParam);
+  if (!preview) return res.status(404).json({ error: 'League not found' });
+  res.json(preview);
 });
 
 router.get('/announce-targets', (req, res) => {

@@ -10,6 +10,7 @@ import {
 import { getUserTournamentPoints } from './tournament.js';
 import { getUserSquadPoints } from './squad.js';
 import { processStartParamForUser } from './bot-start.js';
+import { parseLeagueStartParam } from './invite-links.js';
 import { sendAnnouncementMessage } from './telegram-send.js';
 
 const ANNOUNCE_DELAY_MS = 50;
@@ -121,6 +122,33 @@ export function getBotTopLeaders(limit = 5) {
     totalPoints: entry.totalPoints,
     rank: entry.rank,
   }));
+}
+
+function formatDisplayName(user: { first_name: string; last_name: string | null }): string {
+  return user.first_name + (user.last_name ? ` ${user.last_name[0]}.` : '');
+}
+
+export function getLeagueInvitePreview(startParam: string): {
+  leagueName: string;
+  inviterName: string;
+} | null {
+  const parsed = parseLeagueStartParam(startParam);
+  if (!parsed?.code) return null;
+
+  const league = db
+    .prepare('SELECT name, owner_id FROM leagues WHERE UPPER(code) = ?')
+    .get(parsed.code) as { name: string; owner_id: number } | undefined;
+  if (!league) return null;
+
+  const inviterId = parsed.inviterId ?? league.owner_id;
+  const user = db
+    .prepare('SELECT first_name, last_name FROM users WHERE id = ?')
+    .get(inviterId) as { first_name: string; last_name: string | null } | undefined;
+
+  return {
+    leagueName: league.name,
+    inviterName: user ? formatDisplayName(user) : 'Участник лиги',
+  };
 }
 
 export function getAllRegisteredUserIds(): number[] {

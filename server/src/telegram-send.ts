@@ -133,6 +133,14 @@ function buildInviteText(inviterName: string): string {
   );
 }
 
+function buildLeagueInviteText(inviterName: string, leagueName: string): string {
+  return (
+    `🏆 <b>Приватная лига</b>\n\n` +
+    `<b>${escapeHtml(inviterName)}</b> приглашает вас в лигу <b>«${escapeHtml(leagueName)}»</b>.\n\n` +
+    `Рейтинг виден только участникам лиги.`
+  );
+}
+
 export async function sendBotInviteMessage(inviteeId: number, inviterId: number, inviterName: string): Promise<boolean> {
   return sendTelegramMessage(inviteeId, buildInviteText(inviterName), '🏆 Принять приглашение', webAppUrl(`ref_${inviterId}`));
 }
@@ -140,13 +148,13 @@ export async function sendBotInviteMessage(inviteeId: number, inviterId: number,
 export async function sendLeagueInviteMessage(
   inviteeId: number,
   inviterName: string,
-  _leagueName: string,
+  leagueName: string,
   code: string,
   inviterId: number
 ): Promise<boolean> {
   return sendTelegramMessage(
     inviteeId,
-    buildInviteText(inviterName),
+    buildLeagueInviteText(inviterName, leagueName),
     'Вступить в лигу',
     webAppUrl(buildLeagueStartParam(code, inviterId))
   );

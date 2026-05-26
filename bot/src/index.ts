@@ -94,6 +94,19 @@ function stashAnnounce(adminId: number, text: string): string {
   return id;
 }
 
+function escapeMarkdown(text: string): string {
+  return text.replace(/([_*\[`])/g, '\\$1');
+}
+
+function buildLeagueInviteReply(inviterName: string, leagueName: string): string {
+  return (
+    `🏆 *Приватная лига*\n\n` +
+    `*${escapeMarkdown(inviterName)}* приглашает вас в лигу *«${escapeMarkdown(leagueName)}»*.\n\n` +
+    `Рейтинг виден только участникам лиги.\n\n` +
+    `Откройте приложение, чтобы вступить.`
+  );
+}
+
 function appKeyboard(startParam?: string) {
   const url = webAppUrl(startParam);
   if (canUseWebAppButton(url)) {
@@ -141,13 +154,17 @@ bot.command('start', async ctx => {
   }
 
   if (payload.startsWith('league_')) {
-    await ctx.reply(
-      `🏆 *Приватная лига*\n\n` +
-        `Вас пригласили в закрытую лигу прогнозистов!\n` +
-        `Рейтинг виден только участникам лиги.\n\n` +
-        `Откройте приложение, чтобы вступить.`,
-      { parse_mode: 'Markdown', reply_markup: appKeyboard(payload) }
+    const preview = await apiCall<{ leagueName: string; inviterName: string }>(
+      `/league-invite?startParam=${encodeURIComponent(payload)}`
     );
+    const inviteText = preview
+      ? buildLeagueInviteReply(preview.inviterName, preview.leagueName)
+      : `🏆 *Приватная лига*\n\n` +
+        `Вас приглашают в закрытую лигу прогнозистов!\n` +
+        `Рейтинг виден только участникам лиги.\n\n` +
+        `Откройте приложение, чтобы вступить.`;
+
+    await ctx.reply(inviteText, { parse_mode: 'Markdown', reply_markup: appKeyboard(payload) });
     return;
   }
 
