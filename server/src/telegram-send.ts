@@ -127,6 +127,11 @@ export interface DigestMatchLine {
   points: number;
 }
 
+export async function sendAnnouncementMessage(userId: number, text: string): Promise<boolean> {
+  const body = `📢 <b>Объявление</b>\n\n${escapeHtml(text)}`;
+  return sendTelegramMessage(userId, body, '🏆 Открыть приложение');
+}
+
 export async function sendDailyDigestMessage(
   userId: number,
   periodStartLabel: string,

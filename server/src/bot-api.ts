@@ -10,6 +10,10 @@ import {
 import { getUserTournamentPoints } from './tournament.js';
 import { getUserSquadPoints } from './squad.js';
 import { processStartParamForUser } from './bot-start.js';
+import { sendAnnouncementMessage } from './telegram-send.js';
+
+const ANNOUNCE_DELAY_MS = 50;
+const ANNOUNCE_MAX_LENGTH = 4000;
 
 export function registerTelegramUser(body: {
   id: number;
@@ -117,4 +121,39 @@ export function getBotTopLeaders(limit = 5) {
     totalPoints: entry.totalPoints,
     rank: entry.rank,
   }));
+}
+
+export function getAllRegisteredUserIds(): number[] {
+  return (db.prepare('SELECT id FROM users ORDER BY id').all() as Array<{ id: number }>).map(u => u.id);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function broadcastAnnouncement(text: string): Promise<{
+  sent: number;
+  failed: number;
+  total: number;
+}> {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length > ANNOUNCE_MAX_LENGTH) {
+    return { sent: 0, failed: 0, total: 0 };
+  }
+
+  const userIds = getAllRegisteredUserIds();
+  let sent = 0;
+  let failed = 0;
+
+  for (let i = 0; i < userIds.length; i++) {
+    const ok = await sendAnnouncementMessage(userIds[i], trimmed);
+    if (ok) sent++;
+    else failed++;
+
+    if (i < userIds.length - 1) {
+      await sleep(ANNOUNCE_DELAY_MS);
+    }
+  }
+
+  return { sent, failed, total: userIds.length };
 }

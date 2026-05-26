@@ -5,7 +5,9 @@ import {
   getBotUserStats,
   getBotTodayMatches,
   getBotTopLeaders,
+  broadcastAnnouncement,
 } from './bot-api.js';
+import { isAdminUser, logAdminAction } from './admins.js';
 
 const router = Router();
 
@@ -72,6 +74,25 @@ router.get('/today/:telegramId', (req, res) => {
 router.get('/leaders', (req, res) => {
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '5'), 10) || 5, 1), 20);
   res.json({ leaders: getBotTopLeaders(limit) });
+});
+
+router.post('/announce', async (req, res) => {
+  const adminId = parseTelegramId(req.body?.adminId);
+  const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+
+  if (adminId == null || !isAdminUser(adminId)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  if (!text) {
+    return res.status(400).json({ error: 'Text required' });
+  }
+  if (text.length > 4000) {
+    return res.status(400).json({ error: 'Text too long' });
+  }
+
+  logAdminAction(adminId, 'announce', { length: text.length });
+  const result = await broadcastAnnouncement(text);
+  res.json({ success: true, ...result });
 });
 
 export default router;

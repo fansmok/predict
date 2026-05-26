@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -67,6 +68,32 @@ function canUseWebAppButton(url: string): boolean {
   }
 }
 
+function loadAdminIds(): Set<number> {
+  const ids = new Set<number>();
+  for (const part of (process.env.ADMIN_USER_IDS ?? '').split(/[,;\s]+/)) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const id = Number(trimmed);
+    if (Number.isSafeInteger(id) && id > 0) ids.add(id);
+  }
+  return ids;
+}
+
+const adminIds = loadAdminIds();
+
+function isAdmin(userId: number): boolean {
+  return adminIds.has(userId);
+}
+
+const pendingAnnounces = new Map<string, { adminId: number; text: string }>();
+
+function stashAnnounce(adminId: number, text: string): string {
+  const id = crypto.randomBytes(6).toString('hex');
+  pendingAnnounces.set(id, { adminId, text });
+  setTimeout(() => pendingAnnounces.delete(id), 10 * 60_000);
+  return id;
+}
+
 function appKeyboard(startParam?: string) {
   const url = webAppUrl(startParam);
   if (canUseWebAppButton(url)) {
@@ -126,9 +153,9 @@ bot.command('start', async ctx => {
 
   await ctx.reply(
     `⚽ *Лига Прогнозов — ЧМ-2026*\n\n` +
-      `Добро пожаловать, ${from.first_name}! Делайте прогнозы на матчи Чемпионата мира.\n\n` +
-      `Используйте /stats и /today прямо в боте.\n\n` +
-      `Нажмите кнопку ниже, чтобы открыть приложение!`,
+      `${from.first_name}, добро пожаловать!\n\n` +
+      `Делайте прогнозы на матчи, собирайте fantasy-команду и соревнуйтесь с друзьями — в общем рейтинге или в своих приватных лигах.\n\n` +
+      `Откройте приложение — матчи, рейтинг и ваша команда в одном месте.`,
     { parse_mode: 'Markdown', reply_markup: appKeyboard() }
   );
 });
@@ -210,6 +237,92 @@ bot.command('today', async ctx => {
     `📅 *Матчи сегодня*\n\n${lines.join('\n')}`,
     { parse_mode: 'Markdown', reply_markup: appKeyboard() }
   );
+});
+
+bot.command('announce', async ctx => {
+  const from = ctx.from!;
+  if (!isAdmin(from.id)) {
+    await ctx.reply('Эта команда только для администраторов.');
+    return;
+  }
+
+  const text = (ctx.match ?? '').trim();
+  if (!text) {
+    await ctx.reply(
+      '📢 *Рассылка объявления*\n\n' +
+        'Использование:\n' +
+        '`/announce Текст сообщения для всех игроков`\n\n' +
+        'Сообщение уйдёт всем, кто хотя бы раз запускал бота. Лимит — 4000 символов.',
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  if (text.length > 4000) {
+    await ctx.reply('Слишком длинный текст (максимум 4000 символов).');
+    return;
+  }
+
+  const stashId = stashAnnounce(from.id, text);
+  await ctx.reply(
+    `📢 Превью объявления:\n\n${text}\n\nОтправить всем зарегистрированным пользователям?`,
+    {
+      reply_markup: new InlineKeyboard()
+        .text('✅ Отправить', `announce_ok:${stashId}`)
+        .text('❌ Отмена', 'announce_cancel'),
+    }
+  );
+});
+
+bot.callbackQuery(/^announce_ok:(.+)$/, async ctx => {
+  const from = ctx.from;
+  if (!from || !isAdmin(from.id)) {
+    await ctx.answerCallbackQuery({ text: 'Нет доступа' });
+    return;
+  }
+
+  const pending = pendingAnnounces.get(ctx.match![1]);
+  pendingAnnounces.delete(ctx.match![1]);
+
+  if (!pending || pending.adminId !== from.id) {
+    await ctx.answerCallbackQuery({ text: 'Сессия истекла, повторите /announce' });
+    return;
+  }
+
+  const text = pending.text;
+
+  await ctx.answerCallbackQuery({ text: 'Рассылка началась…' });
+  await ctx.editMessageText('⏳ Рассылка… Это может занять минуту.');
+
+  const result = await apiCall<{ success: boolean; sent: number; failed: number; total: number }>(
+    '/announce',
+    {
+      method: 'POST',
+      body: JSON.stringify({ adminId: from.id, text }),
+    }
+  );
+
+  if (!result) {
+    await ctx.editMessageText('❌ Не удалось выполнить рассылку (ошибка сервера).');
+    return;
+  }
+
+  await ctx.editMessageText(
+    `✅ *Рассылка завершена*\n\n` +
+      `Всего в базе: *${result.total}*\n` +
+      `Доставлено: *${result.sent}*\n` +
+      `Не доставлено: *${result.failed}*`,
+    { parse_mode: 'Markdown' }
+  );
+});
+
+bot.callbackQuery('announce_cancel', async ctx => {
+  if (!ctx.from || !isAdmin(ctx.from.id)) {
+    await ctx.answerCallbackQuery({ text: 'Нет доступа' });
+    return;
+  }
+  await ctx.answerCallbackQuery({ text: 'Отменено' });
+  await ctx.editMessageText('Рассылка отменена.');
 });
 
 bot.command('rank', async ctx => {
