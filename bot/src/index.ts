@@ -1,5 +1,10 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { Bot, InlineKeyboard } from 'grammy';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const token = process.env.BOT_TOKEN;
 const webAppUrlEnv = process.env.WEBAPP_URL ?? 'http://localhost:5173';
@@ -54,9 +59,26 @@ function webAppUrl(startParam?: string): string {
   return url.toString();
 }
 
+function canUseWebAppButton(url: string): boolean {
+  try {
+    return new URL(url).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function appKeyboard(startParam?: string) {
   const url = webAppUrl(startParam);
-  return new InlineKeyboard().webApp('🏆 Открыть Лигу Прогнозов', url);
+  if (canUseWebAppButton(url)) {
+    return new InlineKeyboard().webApp('🏆 Открыть Лигу Прогнозов', url);
+  }
+
+  const botUsername = (process.env.BOT_USERNAME ?? 'predictliga_bot').replace(/^@/, '');
+  const shortName = process.env.WEBAPP_SHORT_NAME ?? 'predictliga';
+  const miniAppLink = startParam
+    ? `https://t.me/${botUsername}/${shortName}?startapp=${encodeURIComponent(startParam)}`
+    : `https://t.me/${botUsername}/${shortName}`;
+  return new InlineKeyboard().url('🏆 Открыть Лигу Прогнозов', miniAppLink);
 }
 
 const HELP_TEXT =

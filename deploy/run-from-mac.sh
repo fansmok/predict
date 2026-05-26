@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Запуск с Mac после того как SSH заработает:
-#   SSHPASS='ваш-пароль' BOT_TOKEN='...' bash deploy/run-from-mac.sh
+# Запуск с Mac:
+#   SSHPASS='root-пароль' BOT_TOKEN='...' UPDATE_ONLY=1 bash deploy/run-from-mac.sh
 
 set -euo pipefail
 
@@ -11,6 +11,7 @@ BOT_USERNAME="${BOT_USERNAME:-predictliga_bot}"
 WEBAPP_SHORT_NAME="${WEBAPP_SHORT_NAME:-predictliga}"
 DOMAIN="${DOMAIN:-predictapp.ru}"
 ADMIN_USER_IDS="${ADMIN_USER_IDS:-}"
+UPDATE_ONLY="${UPDATE_ONLY:-1}"
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -36,7 +37,12 @@ sshpass -e rsync -avz --delete \
   --exclude .env \
   "$ROOT_DIR/" "$SERVER:$APP_DIR/"
 
-echo "==> Установка на сервере"
-sshpass -e ssh "$SERVER" "BOT_TOKEN='$BOT_TOKEN' BOT_USERNAME='$BOT_USERNAME' WEBAPP_SHORT_NAME='$WEBAPP_SHORT_NAME' DOMAIN='$DOMAIN' ADMIN_USER_IDS='$ADMIN_USER_IDS' bash $APP_DIR/deploy/setup-server.sh"
+if [[ "$UPDATE_ONLY" == "1" ]]; then
+  echo "==> Обновление на сервере"
+  sshpass -e ssh "$SERVER" "BOT_TOKEN='$BOT_TOKEN' BOT_USERNAME='$BOT_USERNAME' WEBAPP_SHORT_NAME='$WEBAPP_SHORT_NAME' DOMAIN='$DOMAIN' ADMIN_USER_IDS='$ADMIN_USER_IDS' bash $APP_DIR/deploy/update-server.sh"
+else
+  echo "==> Полная установка на сервере"
+  sshpass -e ssh "$SERVER" "BOT_TOKEN='$BOT_TOKEN' BOT_USERNAME='$BOT_USERNAME' WEBAPP_SHORT_NAME='$WEBAPP_SHORT_NAME' DOMAIN='$DOMAIN' ADMIN_USER_IDS='$ADMIN_USER_IDS' bash $APP_DIR/deploy/setup-server.sh"
+fi
 
 echo "==> Готово: https://$DOMAIN"
