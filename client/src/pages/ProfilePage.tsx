@@ -98,6 +98,7 @@ export function ProfilePage({
         <div className="profile-hero-bg" />
         <div className="profile-hero-content">
           <UserAvatar
+            userId={user.id}
             firstName={user.first_name}
             lastName={user.last_name}
             photoUrl={user.photo_url}

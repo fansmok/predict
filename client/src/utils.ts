@@ -1,4 +1,9 @@
 const MSK = 'Europe/Moscow';
+
+/** Аватар через сервер (свежее фото из Telegram, не протухает). */
+export function userAvatarUrl(userId: number): string {
+  return `/api/users/${userId}/avatar`;
+}
 export const WC_OPENING_KICKOFF = '2026-06-11T22:00:00+03:00';
 const TOURNAMENT_START = new Date(WC_OPENING_KICKOFF);
 

@@ -45,6 +45,7 @@ import { processStartParamForUser } from './bot-start.js';
 import { getPlatinumProgress, getPlatinumFlags, syncReferrersPlatinumStatus } from './platinum.js';
 import { enrichFavoriteTeam, getUserFavoriteTeamId, withFavoriteTeams } from './favorite-team.js';
 import { getPublicUserProfile, parseUserId } from './user-profile.js';
+import { getUserAvatarBytes } from './telegram-avatar.js';
 import botRoutes from './bot-routes.js';
 import { adminMiddleware, isAdminUser, logAdminAction } from './admins.js';
 import {
@@ -398,6 +399,19 @@ router.post('/profile/favorite-team', authMiddleware, (req, res) => {
   const value = teamId || null;
   db.prepare(`UPDATE users SET favorite_team_id = ? WHERE id = ?`).run(value, req.user!.id);
   res.json({ favoriteTeam: enrichFavoriteTeam(value) });
+});
+
+/** Публичный прокси аватара (для <img>, без initData). Кэш на сервере + Telegram Bot API. */
+router.get('/users/:id/avatar', async (req, res) => {
+  const userId = parseUserId(req.params.id);
+  if (!userId) return res.status(400).end();
+
+  const avatar = await getUserAvatarBytes(userId);
+  if (!avatar) return res.status(404).end();
+
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.type(avatar.contentType);
+  res.send(avatar.buffer);
 });
 
 router.get('/users/:id/profile', authMiddleware, (req, res) => {

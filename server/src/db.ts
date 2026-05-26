@@ -405,7 +405,7 @@ export function upsertUser(user: {
       first_name = excluded.first_name,
       last_name = excluded.last_name,
       username = excluded.username,
-      photo_url = excluded.photo_url
+      photo_url = COALESCE(excluded.photo_url, users.photo_url)
   `).run(user.id, user.first_name, user.last_name ?? null, user.username ?? null, user.photo_url ?? null);
 
   return db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as DbUser;

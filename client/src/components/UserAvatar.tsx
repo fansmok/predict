@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Team } from '../types';
-import { getInitials } from '../utils';
+import { getInitials, userAvatarUrl } from '../utils';
 
 type Variant = 'leader' | 'friend' | 'profile';
 
@@ -11,6 +11,7 @@ const LEGACY_CLASS: Record<Variant, string> = {
 };
 
 interface Props {
+  userId?: number;
   firstName: string;
   lastName?: string | null;
   photoUrl?: string | null;
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export function UserAvatar({
+  userId,
   firstName,
   lastName,
   photoUrl,
@@ -32,12 +34,20 @@ export function UserAvatar({
   title,
 }: Props) {
   const [photoFailed, setPhotoFailed] = useState(false);
+  const [photoLoaded, setPhotoLoaded] = useState(false);
+  const [useLegacyUrl, setUseLegacyUrl] = useState(false);
+
+  const proxySrc = userId != null && userId > 0 ? userAvatarUrl(userId) : null;
+  const imageSrc = useLegacyUrl ? photoUrl : proxySrc ?? photoUrl ?? null;
 
   useEffect(() => {
     setPhotoFailed(false);
-  }, [photoUrl]);
+    setPhotoLoaded(false);
+    setUseLegacyUrl(false);
+  }, [userId, photoUrl]);
 
-  const showPhoto = !!photoUrl && !photoFailed;
+  const showPhoto = !!imageSrc && !photoFailed;
+  const eager = variant === 'profile';
 
   const rootClass = [
     'user-avatar',
@@ -49,17 +59,29 @@ export function UserAvatar({
     .join(' ');
   const flagLabel = favoriteTeam ? `Сборная: ${favoriteTeam.name}` : undefined;
 
+  const handleImageError = () => {
+    if (!useLegacyUrl && photoUrl && proxySrc && imageSrc === proxySrc) {
+      setUseLegacyUrl(true);
+      setPhotoLoaded(false);
+      return;
+    }
+    setPhotoFailed(true);
+  };
+
   const content = (
     <>
       <div className="user-avatar-photo" aria-hidden="true">
         {showPhoto ? (
           <img
-            key={photoUrl}
-            src={photoUrl}
+            key={imageSrc}
+            src={imageSrc}
             alt=""
-            loading="lazy"
+            loading={eager ? 'eager' : 'lazy'}
             decoding="async"
-            onError={() => setPhotoFailed(true)}
+            fetchPriority={eager ? 'high' : 'auto'}
+            className={photoLoaded ? 'is-loaded' : ''}
+            onLoad={() => setPhotoLoaded(true)}
+            onError={handleImageError}
           />
         ) : (
           <span>{getInitials(firstName, lastName)}</span>

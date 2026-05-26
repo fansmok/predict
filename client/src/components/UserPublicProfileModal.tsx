@@ -203,6 +203,7 @@ export function UserPublicProfileModal({
               <header className="user-profile-header">
                 <div className="user-profile-hero">
                   <UserAvatar
+                    userId={profile.user.id}
                     firstName={profile.user.firstName}
                     lastName={profile.user.lastName}
                     photoUrl={profile.user.photoUrl}

@@ -206,6 +206,7 @@ function FriendRow({
         aria-label={`Профиль: ${name}`}
       >
         <UserAvatar
+          userId={user.id}
           firstName={user.firstName}
           lastName={user.lastName}
           photoUrl={user.photoUrl}

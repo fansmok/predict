@@ -118,6 +118,7 @@ function LeaderList({
                 {leader.rank <= 3 ? rankEmoji(leader.rank) : leader.rank}
               </div>
               <UserAvatar
+                userId={leader.id}
                 firstName={leader.firstName}
                 lastName={leader.lastName}
                 photoUrl={leader.photoUrl}

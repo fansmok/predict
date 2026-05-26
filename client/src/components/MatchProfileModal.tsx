@@ -392,6 +392,7 @@ export function MatchProfileModal({ match, onClose }: Props) {
                           {rankEmoji(u.rank)}
                         </span>
                         <UserAvatar
+                          userId={u.id}
                           firstName={u.firstName}
                           lastName={u.lastName}
                           photoUrl={u.photoUrl}
