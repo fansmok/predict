@@ -1,3 +1,5 @@
+import { db } from './db.js';
+
 const BOT_TOKEN = process.env.BOT_TOKEN ?? '';
 const HIT_TTL_MS = 6 * 60 * 60 * 1000;
 const MISS_TTL_MS = 15 * 60 * 1000;
@@ -23,6 +25,36 @@ async function tgGet<T>(method: string, params: Record<string, string | number>)
   }
 }
 
+async function fetchRemotePhoto(
+  photoUrl: string
+): Promise<{ buffer: Buffer; contentType: string } | null> {
+  try {
+    const res = await fetch(photoUrl, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type')?.split(';')[0]?.trim() || '';
+    if (contentType && !contentType.startsWith('image/')) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length < 64) return null;
+    return { buffer, contentType: contentType || 'image/jpeg' };
+  } catch {
+    return null;
+  }
+}
+
+function getStoredPhotoUrl(userId: number): string | null {
+  const row = db.prepare('SELECT photo_url FROM users WHERE id = ?').get(userId) as
+    | { photo_url: string | null }
+    | undefined;
+  const url = row?.photo_url?.trim();
+  return url || null;
+}
+
+async function tryStoredPhotoUrl(userId: number): Promise<{ buffer: Buffer; contentType: string } | null> {
+  const photoUrl = getStoredPhotoUrl(userId);
+  if (!photoUrl) return null;
+  return fetchRemotePhoto(photoUrl);
+}
+
 export async function getUserAvatarBytes(
   userId: number
 ): Promise<{ buffer: Buffer; contentType: string } | null> {
@@ -45,12 +77,22 @@ export async function getUserAvatarBytes(
   const sizes = photos?.photos?.[0];
   const fileId = sizes?.[sizes.length - 1]?.file_id;
   if (!fileId) {
+    const stored = await tryStoredPhotoUrl(userId);
+    if (stored) {
+      cache.set(userId, { kind: 'hit', ...stored, at: now });
+      return stored;
+    }
     cache.set(userId, { kind: 'miss', at: now });
     return null;
   }
 
   const file = await tgGet<{ file_path: string }>('getFile', { file_id: fileId });
   if (!file?.file_path) {
+    const stored = await tryStoredPhotoUrl(userId);
+    if (stored) {
+      cache.set(userId, { kind: 'hit', ...stored, at: now });
+      return stored;
+    }
     cache.set(userId, { kind: 'miss', at: now });
     return null;
   }
@@ -58,6 +100,11 @@ export async function getUserAvatarBytes(
   try {
     const fileRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`);
     if (!fileRes.ok) {
+      const stored = await tryStoredPhotoUrl(userId);
+      if (stored) {
+        cache.set(userId, { kind: 'hit', ...stored, at: now });
+        return stored;
+      }
       cache.set(userId, { kind: 'miss', at: now });
       return null;
     }
@@ -68,6 +115,11 @@ export async function getUserAvatarBytes(
     return { buffer, contentType };
   } catch (e) {
     console.warn(`[telegram-avatar] download ${userId}:`, e instanceof Error ? e.message : e);
+    const stored = await tryStoredPhotoUrl(userId);
+    if (stored) {
+      cache.set(userId, { kind: 'hit', ...stored, at: now });
+      return stored;
+    }
     cache.set(userId, { kind: 'miss', at: now });
     return null;
   }

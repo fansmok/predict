@@ -1,8 +1,15 @@
 const MSK = 'Europe/Moscow';
 
-/** Аватар через сервер (свежее фото из Telegram, не протухает). */
-export function userAvatarUrl(userId: number): string {
-  return `/api/users/${userId}/avatar`;
+/** Аватар через сервер (Telegram Bot API + photo_url из БД). */
+export function userAvatarUrl(userId: number, photoUrl?: string | null): string {
+  const base = `/api/users/${userId}/avatar`;
+  if (photoUrl) {
+    const tail = photoUrl.slice(-24);
+    let hash = 0;
+    for (let i = 0; i < tail.length; i++) hash = (hash * 31 + tail.charCodeAt(i)) | 0;
+    return `${base}?v=${Math.abs(hash)}`;
+  }
+  return base;
 }
 export const WC_OPENING_KICKOFF = '2026-06-11T22:00:00+03:00';
 const TOURNAMENT_START = new Date(WC_OPENING_KICKOFF);

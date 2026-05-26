@@ -3,6 +3,7 @@ import { Match, SquadPlayerOption, TournamentOption } from '../types';
 import { api } from '../api';
 import { POS_GROUPS, sortPlayersByPosition } from '../adminUtils';
 import { AdminTournamentSection } from '../components/AdminTournamentSection';
+import { AdminModerationSection } from '../components/AdminModerationSection';
 
 interface Props {
   matches: Match[];
@@ -12,7 +13,7 @@ interface Props {
   onRefresh: () => Promise<void>;
 }
 
-type AdminSection = 'matches' | 'tournament';
+type AdminSection = 'matches' | 'tournament' | 'moderation';
 
 interface GoalRow {
   scorerId: string;
@@ -683,7 +684,9 @@ export function AdminPage({ matches, squadPlayers, tournamentTeams, tournamentPl
         <p>
           {section === 'matches'
             ? 'Результаты матчей и fantasy. API подтягивает счёт автоматически.'
-            : 'Итоги чемпионата для прогнозов на турнир и начисления очков.'}
+            : section === 'tournament'
+              ? 'Итоги чемпионата для прогнозов на турнир и начисления очков.'
+              : 'Удаление лиг и пользователей — только для администраторов приложения.'}
         </p>
       </div>
 
@@ -704,9 +707,19 @@ export function AdminPage({ matches, squadPlayers, tournamentTeams, tournamentPl
         >
           Прогнозы на турнир
         </button>
+        <button
+          type="button"
+          className={`admin-filter-btn ${section === 'moderation' ? 'active' : ''}`}
+          aria-pressed={section === 'moderation'}
+          onClick={() => setSection('moderation')}
+        >
+          Модерация
+        </button>
       </div>
 
-      {section === 'tournament' ? (
+      {section === 'moderation' ? (
+        <AdminModerationSection onChanged={onRefresh} />
+      ) : section === 'tournament' ? (
         <section className="admin-section">
           <h3 className="admin-section-title">Итоги турнира</h3>
           {message && message.text && (

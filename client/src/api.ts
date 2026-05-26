@@ -262,6 +262,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  adminDeleteLeague: (leagueId: number) =>
+    request<{ ok: boolean; deleted: true; name: string }>(`/admin/leagues/${leagueId}`, {
+      method: 'DELETE',
+    }),
+  adminDeleteUser: (userId: number) =>
+    request<{ ok: boolean }>(`/admin/users/${userId}`, { method: 'DELETE' }),
 };
 
 declare global {

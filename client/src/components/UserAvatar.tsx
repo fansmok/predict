@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Team } from '../types';
 import { getInitials, userAvatarUrl } from '../utils';
 
@@ -22,6 +22,12 @@ interface Props {
   title?: string;
 }
 
+function markLoaded(img: HTMLImageElement | null, setLoaded: (v: boolean) => void): void {
+  if (img?.complete && img.naturalWidth > 0) {
+    setLoaded(true);
+  }
+}
+
 export function UserAvatar({
   userId,
   firstName,
@@ -33,21 +39,28 @@ export function UserAvatar({
   onClick,
   title,
 }: Props) {
+  const imgRef = useRef<HTMLImageElement>(null);
   const [photoFailed, setPhotoFailed] = useState(false);
   const [photoLoaded, setPhotoLoaded] = useState(false);
-  const [useLegacyUrl, setUseLegacyUrl] = useState(false);
+  const [fallbackStep, setFallbackStep] = useState(0);
 
-  const proxySrc = userId != null && userId > 0 ? userAvatarUrl(userId) : null;
-  const imageSrc = useLegacyUrl ? photoUrl : proxySrc ?? photoUrl ?? null;
+  const proxySrc = userId != null && userId > 0 ? userAvatarUrl(userId, photoUrl) : null;
+  const sources = [proxySrc, photoUrl].filter((s): s is string => !!s);
+  const imageSrc = sources[fallbackStep] ?? null;
+  const eager = variant === 'profile';
+  const fadePhoto = variant !== 'profile';
 
   useEffect(() => {
     setPhotoFailed(false);
     setPhotoLoaded(false);
-    setUseLegacyUrl(false);
+    setFallbackStep(0);
   }, [userId, photoUrl]);
 
+  useEffect(() => {
+    markLoaded(imgRef.current, setPhotoLoaded);
+  }, [imageSrc]);
+
   const showPhoto = !!imageSrc && !photoFailed;
-  const eager = variant === 'profile';
 
   const rootClass = [
     'user-avatar',
@@ -60,31 +73,37 @@ export function UserAvatar({
   const flagLabel = favoriteTeam ? `Сборная: ${favoriteTeam.name}` : undefined;
 
   const handleImageError = () => {
-    if (!useLegacyUrl && photoUrl && proxySrc && imageSrc === proxySrc) {
-      setUseLegacyUrl(true);
+    if (fallbackStep + 1 < sources.length) {
+      setFallbackStep(fallbackStep + 1);
       setPhotoLoaded(false);
       return;
     }
     setPhotoFailed(true);
   };
 
+  const imgClass = fadePhoto
+    ? photoLoaded
+      ? 'is-loaded'
+      : ''
+    : 'is-loaded';
+
   const content = (
     <>
       <div className="user-avatar-photo" aria-hidden="true">
-        {showPhoto ? (
+        {!showPhoto && <span>{getInitials(firstName, lastName)}</span>}
+        {showPhoto && (
           <img
+            ref={imgRef}
             key={imageSrc}
             src={imageSrc}
             alt=""
             loading={eager ? 'eager' : 'lazy'}
             decoding="async"
             fetchPriority={eager ? 'high' : 'auto'}
-            className={photoLoaded ? 'is-loaded' : ''}
+            className={imgClass}
             onLoad={() => setPhotoLoaded(true)}
             onError={handleImageError}
           />
-        ) : (
-          <span>{getInitials(firstName, lastName)}</span>
         )}
       </div>
       {favoriteTeam?.flag && (

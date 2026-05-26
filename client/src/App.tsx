@@ -166,7 +166,7 @@ export default function App() {
 
   useEffect(() => {
     if (!inviteBanner) return;
-    const timer = window.setTimeout(() => setInviteBanner(''), 10_000);
+    const timer = window.setTimeout(() => setInviteBanner(''), 5_000);
     return () => window.clearTimeout(timer);
   }, [inviteBanner]);
 

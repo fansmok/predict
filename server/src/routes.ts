@@ -48,6 +48,7 @@ import { getPublicUserProfile, parseUserId } from './user-profile.js';
 import { getUserAvatarBytes } from './telegram-avatar.js';
 import botRoutes from './bot-routes.js';
 import { adminMiddleware, isAdminUser, logAdminAction } from './admins.js';
+import { deleteLeagueByAdmin, deleteUserByAdmin } from './admin-moderation.js';
 import {
   emptyConsensus,
   isDevAuthEnabled,
@@ -1211,6 +1212,43 @@ router.post('/admin/squad-stats', authMiddleware, adminMiddleware, (req, res) =>
   const updated = upsertSquadStats(validated.matchId, validated.stats);
   logAdminAction(userId, 'squad-stats', { matchId: validated.matchId, rows: updated });
   res.json({ success: true, updated });
+});
+
+router.delete('/admin/leagues/:id', authMiddleware, adminMiddleware, (req, res) => {
+  const actorId = req.user!.id;
+  const leagueId = parseInt(String(req.params.id), 10);
+  if (!Number.isSafeInteger(leagueId) || leagueId <= 0) {
+    return res.status(400).json({ error: 'Некорректный id лиги' });
+  }
+
+  try {
+    const result = deleteLeagueByAdmin(actorId, leagueId);
+    logAdminAction(actorId, 'delete-league', { leagueId, name: result.name });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Ошибка';
+    const status = msg.includes('не найден') ? 404 : msg.includes('прав') ? 403 : 400;
+    res.status(status).json({ error: msg });
+  }
+});
+
+router.delete('/admin/users/:userId', authMiddleware, adminMiddleware, (req, res) => {
+  const actorId = req.user!.id;
+  const targetUserId = parseUserId(req.params.userId);
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'Некорректный id пользователя' });
+  }
+
+  try {
+    deleteUserByAdmin(actorId, targetUserId);
+    logAdminAction(actorId, 'delete-user', { targetUserId });
+    res.json({ ok: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Ошибка';
+    const status =
+      msg.includes('не найден') ? 404 : msg.includes('прав') || msg.includes('администра') ? 403 : 400;
+    res.status(status).json({ error: msg });
+  }
 });
 
 export default router;

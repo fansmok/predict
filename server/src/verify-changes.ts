@@ -14,6 +14,7 @@ import { buildTelegramMiniAppLink, webAppUrl } from './telegram-send.js';
 import { createLeague, joinLeagueByCode } from './leagues.js';
 import { resolveTournamentPickFields } from './tournament.js';
 import { isAdminUser, resetAdminIdsCache } from './admins.js';
+import { deleteLeagueByAdmin, deleteUserByAdmin } from './admin-moderation.js';
 import { parseMatchesGroupFilter, parseLeagueCode, parseUserIdList } from './security.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -156,7 +157,49 @@ async function main() {
   assert(merged.thirdTeamId === 'bra', 'third should be preserved on partial update');
   assert(merged.topScorerPlayerId === 'mbappe', 'scorer should be preserved on partial update');
 
-  cleanupTestUsers(testId, testId + 1, refId);
+  // H4: admin moderation — only ADMIN_USER_IDS
+  const adminId = 999001;
+  const victimId = 999881;
+  const outsiderId = 999882;
+  registerTelegramUser({ id: victimId, first_name: 'Victim' });
+  registerTelegramUser({ id: outsiderId, first_name: 'Outsider' });
+  const modLeague = createLeague(victimId, 'ModTest League');
+
+  try {
+    deleteLeagueByAdmin(outsiderId, modLeague.id);
+    bugs.push('deleteLeagueByAdmin: outsider should be rejected');
+  } catch (e) {
+    assert(
+      e instanceof Error && e.message.includes('прав'),
+      'deleteLeagueByAdmin outsider should get forbidden'
+    );
+  }
+
+  const delLeague = deleteLeagueByAdmin(adminId, modLeague.id);
+  assert(delLeague.deleted, 'admin should delete league');
+  assert(
+    !db.prepare('SELECT 1 FROM leagues WHERE id = ?').get(modLeague.id),
+    'league row should be gone'
+  );
+
+  try {
+    deleteUserByAdmin(adminId, adminId);
+    bugs.push('deleteUserByAdmin: self-delete should fail');
+  } catch (e) {
+    assert(e instanceof Error && e.message.includes('свой'), 'self-delete rejected');
+  }
+
+  try {
+    deleteUserByAdmin(outsiderId, victimId);
+    bugs.push('deleteUserByAdmin: outsider should fail');
+  } catch (e) {
+    assert(e instanceof Error && e.message.includes('прав'), 'outsider delete rejected');
+  }
+
+  deleteUserByAdmin(adminId, victimId);
+  assert(!db.prepare('SELECT 1 FROM users WHERE id = ?').get(victimId), 'victim user deleted');
+
+  cleanupTestUsers(testId, testId + 1, refId, outsiderId);
 
   console.log(`Bugs found: ${bugs.length}`);
   if (bugs.length) {
