@@ -45,6 +45,7 @@ interface Props {
   /** Увеличивается при повторном нажатии «Рейтинг» в нижнем меню — выход на главный экран. */
   leaderboardResetKey?: number;
   isActive?: boolean;
+  refreshKey?: number;
   onViewUser: (userId: number) => void;
 }
 
@@ -443,6 +444,7 @@ export function LeaderboardPage({
   onLeagueOpened,
   leaderboardResetKey = 0,
   isActive = true,
+  refreshKey = 0,
   onViewUser,
 }: Props) {
   const [mode, setMode] = useState<LbMode>('players');
@@ -561,9 +563,21 @@ export function LeaderboardPage({
   }, [leagueDrillId, rankKind]);
 
   useEffect(() => {
-    if (!isActive || leagueDrillId == null) return;
-    reloadLeagueDrill().catch(() => {});
-  }, [isActive, leagueDrillId, reloadLeagueDrill]);
+    if (!isActive) return;
+    refreshGlobal();
+    if (leagueDrillId != null) reloadLeagueDrill().catch(() => {});
+  }, [isActive, refreshKey, refreshGlobal, leagueDrillId, reloadLeagueDrill]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      refreshGlobal();
+      if (leagueDrillId != null) reloadLeagueDrill().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [isActive, refreshGlobal, leagueDrillId, reloadLeagueDrill]);
 
   const handleLeagueCreated = useCallback(
     async (leagueId: number, inviteLink: string) => {

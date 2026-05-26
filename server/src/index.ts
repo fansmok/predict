@@ -14,6 +14,7 @@ import {
   secureApiHeaders,
 } from './security.js';
 import { getBotUsername, initBotUsername } from './bot-config.js';
+import { recalculateAllFinishedMatchPoints } from './admin.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
@@ -24,6 +25,11 @@ const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
 initDatabase();
 warnIfNoAdminsConfigured();
+
+const recalced = recalculateAllFinishedMatchPoints();
+if (recalced > 0) {
+  console.log(`[scoring] Пересчитаны очки прогнозов: ${recalced} записей`);
+}
 
 const app = express();
 

@@ -12,6 +12,7 @@ import { PlatinumName } from '../components/PlatinumName';
 interface Props {
   myId: number;
   isActive?: boolean;
+  refreshKey?: number;
   onGoToLeaderboard: () => void;
   onViewUser: (userId: number) => void;
 }
@@ -44,7 +45,7 @@ function formatJoinedAt(iso?: string): string | null {
   return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 }
 
-export function FriendsPage({ isActive = true, onGoToLeaderboard, onViewUser }: Props) {
+export function FriendsPage({ isActive = true, refreshKey = 0, onGoToLeaderboard, onViewUser }: Props) {
   const [data, setData] = useState<FriendsData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -60,7 +61,7 @@ export function FriendsPage({ isActive = true, onGoToLeaderboard, onViewUser }: 
   useEffect(() => {
     if (!isActive) return;
     load();
-  }, [isActive, load]);
+  }, [isActive, load, refreshKey]);
 
   useEffect(() => {
     if (!isActive) return;

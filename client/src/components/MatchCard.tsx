@@ -85,7 +85,6 @@ export const MatchCard = memo(function MatchCard({ match, onClick, onProfile, sh
                 >
                   Прогноз: {homeScore}:{awayScore}
                   {match.prediction!.points !== null && ` · +${match.prediction!.points}`}
-                  {match.isDouble && match.prediction!.points !== null && match.prediction!.points > 0 && ' ×2'}
                 </span>
               )}
             </>

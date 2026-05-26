@@ -30,6 +30,10 @@ function main() {
   assert(calculatePoints(2, 0, 1, 0) === 2, 'верный исход П1 = 2');
   assert(calculatePoints(0, 2, 0, 1) === 2, 'верный исход П2 = 2');
   assert(calculatePoints(1, 1, 2, 2) === 3, 'ничья 1:1 при 2:2 = верная разница (0) = 3');
+  assert(calculatePoints(1, 1, 2, 2, true) === 6, 'ничья 1:1 при 2:2 ×2 = 6');
+  assert(calculatePoints(2, 2, 0, 0, true) === 6, 'ничья 2:2 при 0:0 ×2 = 6');
+  assert(calculatePoints(0, 0, 1, 1, true) === 6, 'ничья 0:0 при 1:1 ×2 = 6');
+  assert(calculatePoints(1, 1, 1, 1, true) === 10, 'точная ничья 1:1 ×2 = 10');
   assert(calculatePoints(2, 0, 0, 2) === 0, 'промах = 0');
 
   // --- Fantasy за матч ---

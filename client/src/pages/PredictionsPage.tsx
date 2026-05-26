@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Match } from '../types';
 import { MatchCard } from '../components/MatchCard';
 import { ScorePicker } from '../components/ScorePicker';
@@ -6,6 +6,7 @@ import { formatMatches, groupMatchesByDateSorted, formatMatchDayTitle } from '..
 import { IconTarget } from '../components/Icons';
 
 interface Props {
+  tabActive?: boolean;
   matches: Match[];
   doublePicks: Record<string, number>;
   onSavePrediction: (matchId: number, home: number, away: number, useDouble?: boolean) => Promise<void>;
@@ -56,11 +57,16 @@ function PredictionsMatchSection({
 }
 
 export function PredictionsPage({
+  tabActive = true,
   matches,
   doublePicks,
   onSavePrediction,
 }: Props) {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+
+  useEffect(() => {
+    if (!tabActive) setSelectedMatch(null);
+  }, [tabActive]);
 
   const { pending, editable } = useMemo(() => {
     const open = matches.filter(m => m.canPredict);

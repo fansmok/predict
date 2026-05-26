@@ -79,6 +79,7 @@ export default function App() {
   const [leagueToOpenId, setLeagueToOpenId] = useState<number | null>(null);
   const [leaderboardResetKey, setLeaderboardResetKey] = useState(0);
   const [inviteBanner, setInviteBanner] = useState('');
+  const [socialRefreshKey, setSocialRefreshKey] = useState(0);
   const contentRef = useRef<HTMLElement>(null);
   /** Вкладки, уже отрисованные хотя бы раз — не размонтируем при переключении. */
   const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set(['matches']));
@@ -195,6 +196,7 @@ export default function App() {
             return next;
           });
           setInviteBanner(`Вы вступили в лигу «${result.league.name}»`);
+          setSocialRefreshKey(k => k + 1);
           window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
 
           const leaguesRes = await api.getLeagues();
@@ -267,6 +269,8 @@ export default function App() {
 
   const handleTabChange = useCallback((next: Tab) => {
     setShowRules(false);
+    setShowAdmin(false);
+    setViewUserId(null);
     if (next === 'leaderboard') {
       setLeaderboardResetKey(k => k + 1);
     }
@@ -446,6 +450,7 @@ export default function App() {
         {mountedTabs.has('matches') && (
           <TabPanel tab="matches" activeTab={tab}>
             <MatchesPage
+              tabActive={tab === 'matches'}
               matches={matches}
               doublePicks={doublePicks}
               tournament={tournament}
@@ -479,6 +484,7 @@ export default function App() {
         {mountedTabs.has('predictions') && (
           <TabPanel tab="predictions" activeTab={tab}>
             <PredictionsPage
+              tabActive={tab === 'predictions'}
               matches={matches}
               doublePicks={doublePicks}
               onSavePrediction={handleSavePrediction}
@@ -490,6 +496,7 @@ export default function App() {
             <FriendsPage
               myId={user.id}
               isActive={tab === 'friends'}
+              refreshKey={socialRefreshKey}
               onGoToLeaderboard={() => setTab('leaderboard')}
               onViewUser={setViewUserId}
             />
@@ -508,6 +515,7 @@ export default function App() {
               ownedLeagueCount={ownedLeagueCount}
               maxOwnedLeagues={maxOwnedLeagues}
               isActive={tab === 'leaderboard'}
+              refreshKey={socialRefreshKey}
               onLeaguesChange={async () => {
                 const res = await api.getLeagues();
                 setLeagues(res.leagues);

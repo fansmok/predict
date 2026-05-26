@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { Team } from '../types';
 import { getInitials } from '../utils';
 
@@ -30,6 +31,14 @@ export function UserAvatar({
   onClick,
   title,
 }: Props) {
+  const [photoFailed, setPhotoFailed] = useState(false);
+
+  useEffect(() => {
+    setPhotoFailed(false);
+  }, [photoUrl]);
+
+  const showPhoto = !!photoUrl && !photoFailed;
+
   const rootClass = [
     'user-avatar',
     `user-avatar--${variant}`,
@@ -43,8 +52,15 @@ export function UserAvatar({
   const content = (
     <>
       <div className="user-avatar-photo" aria-hidden="true">
-        {photoUrl ? (
-          <img src={photoUrl} alt="" />
+        {showPhoto ? (
+          <img
+            key={photoUrl}
+            src={photoUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onError={() => setPhotoFailed(true)}
+          />
         ) : (
           <span>{getInitials(firstName, lastName)}</span>
         )}

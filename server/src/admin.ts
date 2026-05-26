@@ -35,43 +35,71 @@ export function getGroupMatch(matchId: number) {
   return getAdminMatch(matchId);
 }
 
-export function applyMatchResult(matchId: number, homeScore: number, awayScore: number): number {
-  let updated = 0;
+/** Пересчёт очков прогнозов по итоговому счёту и актуальным ставкам ×2. */
+export function recalculateMatchPredictionPoints(matchId: number): number {
+  const match = db.prepare(`
+    SELECT home_score, away_score, status FROM matches WHERE id = ?
+  `).get(matchId) as { home_score: number | null; away_score: number | null; status: string } | undefined;
 
+  if (
+    !match ||
+    match.status !== 'finished' ||
+    match.home_score == null ||
+    match.away_score == null
+  ) {
+    return 0;
+  }
+
+  const predictions = db.prepare(`
+    SELECT p.id, p.user_id, p.home_score, p.away_score
+    FROM predictions p WHERE p.match_id = ?
+  `).all(matchId) as Array<{ id: number; user_id: number; home_score: number; away_score: number }>;
+
+  const doubleUserIds = new Set(
+    (db.prepare(`SELECT user_id FROM double_picks WHERE match_id = ?`).all(matchId) as Array<{ user_id: number }>)
+      .map(r => r.user_id)
+  );
+
+  const updatePoints = db.prepare('UPDATE predictions SET points = ? WHERE id = ?');
+  for (const p of predictions) {
+    const pts = calculatePoints(
+      p.home_score,
+      p.away_score,
+      match.home_score!,
+      match.away_score!,
+      doubleUserIds.has(p.user_id)
+    );
+    updatePoints.run(pts, p.id);
+  }
+
+  invalidateLeaderboardCache();
+  return predictions.length;
+}
+
+/** Пересчёт очков по всем завершённым матчам (после деплоя или смены правил ×2). */
+export function recalculateAllFinishedMatchPoints(): number {
+  const rows = db.prepare(`
+    SELECT id FROM matches
+    WHERE status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
+  `).all() as Array<{ id: number }>;
+
+  let total = 0;
+  for (const row of rows) {
+    total += recalculateMatchPredictionPoints(row.id);
+  }
+  return total;
+}
+
+export function applyMatchResult(matchId: number, homeScore: number, awayScore: number): number {
   const apply = db.transaction(() => {
     db.prepare(`
       UPDATE matches SET home_score = ?, away_score = ?, status = 'finished'
       WHERE id = ?
     `).run(homeScore, awayScore, matchId);
-
-    const predictions = db.prepare(`
-      SELECT p.id, p.user_id, p.home_score, p.away_score
-      FROM predictions p WHERE p.match_id = ?
-    `).all(matchId) as Array<{ id: number; user_id: number; home_score: number; away_score: number }>;
-
-    const doubleUserIds = new Set(
-      (db.prepare(`SELECT user_id FROM double_picks WHERE match_id = ?`).all(matchId) as Array<{ user_id: number }>)
-        .map(r => r.user_id)
-    );
-
-    const updatePoints = db.prepare('UPDATE predictions SET points = ? WHERE id = ?');
-    for (const p of predictions) {
-      const pts = calculatePoints(
-        p.home_score,
-        p.away_score,
-        homeScore,
-        awayScore,
-        doubleUserIds.has(p.user_id)
-      );
-      updatePoints.run(pts, p.id);
-    }
-    updated = predictions.length;
   });
 
   apply();
-  invalidateLeaderboardCache();
-
-  return updated;
+  return recalculateMatchPredictionPoints(matchId);
 }
 
 export function getAdminTournamentState() {

@@ -19,6 +19,7 @@ import { MatchFilterPanel } from '../components/MatchFilterPanel';
 import { WC_GROUPS } from '../wc-groups';
 
 interface Props {
+  tabActive?: boolean;
   matches: Match[];
   doublePicks: Record<string, number>;
   tournament: TournamentData;
@@ -51,6 +52,7 @@ function buildDateGroups(list: Match[]): MatchDayGroup<Match>[] {
 }
 
 export function MatchesPage({
+  tabActive = true,
   matches,
   doublePicks,
   tournament,
@@ -103,6 +105,13 @@ export function MatchesPage({
       return next;
     });
   }, [group]);
+
+  useEffect(() => {
+    if (!tabActive) {
+      setProfileMatch(null);
+      setSelectedMatch(null);
+    }
+  }, [tabActive]);
 
   const setGroupFilter = useCallback((next: string) => {
     startTransition(() => setGroup(next));
