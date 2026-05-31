@@ -49,7 +49,7 @@ if [[ -z "$BOT_TOKEN" && -f "$APP_DIR/deploy/server-update.sh" ]]; then
   exec bash "$APP_DIR/deploy/server-update.sh"
 fi
 
-npm install
+NODE_ENV=development npm install --include=dev
 npm run build
 pm2 restart liga-server liga-bot
 pm2 save

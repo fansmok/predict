@@ -60,7 +60,8 @@ upsert_env "PORT" "${PORT}"
 chmod 600 "$ENV_FILE"
 
 echo "==> npm install + build"
-npm install
+# devDependencies (typescript, vite) нужны для сборки; NODE_ENV=production их отключает
+NODE_ENV=development npm install --include=dev
 npm run build
 
 echo "==> PM2"

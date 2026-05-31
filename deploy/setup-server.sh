@@ -63,7 +63,7 @@ EOF
 chmod 600 "$APP_DIR/.env"
 
 echo "==> Сборка"
-npm install
+NODE_ENV=development npm install --include=dev
 npm run build
 
 echo "==> nginx"
