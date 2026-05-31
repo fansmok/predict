@@ -41,6 +41,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   getMe: () => request<{ user: import('./types').User; stats: import('./types').UserStats }>('/auth/me'),
+  checkAdmin: () => request<{ isAdmin: boolean }>('/auth/admin-check'),
   getUserProfile: (userId: number) =>
     request<import('./types').PublicUserProfile>(`/users/${userId}/profile`),
   saveFavoriteTeam: (teamId: string) =>

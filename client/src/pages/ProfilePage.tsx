@@ -14,6 +14,7 @@ import { FavoriteTeamBanner, FavoriteTeamPicker } from '../components/FavoriteTe
 interface Props {
   user: User;
   stats: UserStats;
+  isAdmin?: boolean;
   tournament: TournamentData;
   tournamentTeams: TournamentOption[];
   tournamentPlayers: TournamentOption[];
@@ -40,6 +41,7 @@ function rankBadge(rank: number): string {
 export function ProfilePage({
   user,
   stats,
+  isAdmin = false,
   tournament,
   tournamentTeams,
   tournamentPlayers,
@@ -115,7 +117,7 @@ export function ProfilePage({
                 {displayName(user.first_name, user.last_name)}
               </PlatinumName>
             </h2>
-            {user.isAdmin && <AdminIdBadge id={user.id} label="User" />}
+            {isAdmin && <AdminIdBadge id={user.id} label="User" />}
           </div>
           <div className="profile-hero-points">
             <span className={`profile-hero-points-value ${pointsToneClass(stats.totalPoints)}`}>

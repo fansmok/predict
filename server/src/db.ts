@@ -6,6 +6,7 @@ import { SQUAD_PLAYERS } from './data/squad-players.js';
 import { backfillPlatinumStatuses } from './platinum.js';
 import { resetSquadScoringCache } from './squad.js';
 import { runSchemaMigrations } from './db-migrate.js';
+import { sanitizePhotoUrl } from './security.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.join(__dirname, '..', 'data.db');
@@ -398,6 +399,8 @@ export function upsertUser(user: {
   username?: string;
   photo_url?: string;
 }): DbUser {
+  const photoUrl = sanitizePhotoUrl(user.photo_url) ?? null;
+
   db.prepare(`
     INSERT INTO users (id, first_name, last_name, username, photo_url)
     VALUES (?, ?, ?, ?, ?)
@@ -406,7 +409,7 @@ export function upsertUser(user: {
       last_name = excluded.last_name,
       username = excluded.username,
       photo_url = COALESCE(excluded.photo_url, users.photo_url)
-  `).run(user.id, user.first_name, user.last_name ?? null, user.username ?? null, user.photo_url ?? null);
+  `).run(user.id, user.first_name, user.last_name ?? null, user.username ?? null, photoUrl);
 
   return db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as DbUser;
 }

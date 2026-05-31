@@ -46,6 +46,9 @@ app.use(cors({
     // Тот же домен по http или https (до/после certbot)
     try {
       if (new URL(origin).hostname === new URL(webappOrigin).hostname) {
+        if (isProduction() && webappOrigin.startsWith('https://') && origin.startsWith('http://')) {
+          return callback(new Error('Not allowed by CORS'));
+        }
         return callback(null, true);
       }
     } catch {
@@ -85,6 +88,13 @@ app.use('/api/friends/invite', strictRateLimit);
 app.use('/api/leagues/join', strictRateLimit);
 app.use('/api/leagues/:id/invite', strictRateLimit);
 app.use('/api/admin', strictRateLimit);
+
+const botApiRateLimit = createRateLimiter({
+  windowMs: 60_000,
+  max: 120,
+  message: 'Слишком много запросов к bot API',
+});
+app.use('/api/bot', botApiRateLimit);
 
 app.use('/api', routes);
 

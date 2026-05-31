@@ -81,7 +81,10 @@ npm start
 
 | Переменная | Описание |
 |------------|----------|
-| `BOT_TOKEN` | Токен Telegram-бота |
+| `BOT_TOKEN` | Токен Telegram-бота (Telegram API + initData Mini App) |
+| `BOT_API_SECRET` | Секрет bot↔server для `/api/bot` (≥32 символа, `openssl rand -hex 32`) |
+| `BOT_API_ALLOWED_IPS` | IP для `/api/bot` в production (например `127.0.0.1,::1`) |
+| `SERVER_URL` | URL backend для бота (локально / на VPS: `http://127.0.0.1:3001`) |
 | `WEBAPP_URL` | URL Web App для бота |
 | `PORT` | Порт сервера (по умолчанию 3001) |
 | `DEV_MODE` | `true` — авторизация без Telegram |

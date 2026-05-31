@@ -9,13 +9,15 @@ set -euo pipefail
 APP_DIR="/opt/predict"
 REPO_URL="https://github.com/fansmok/predict.git"
 BOT_TOKEN="${BOT_TOKEN:?Задайте BOT_TOKEN}"
+BOT_API_SECRET="${BOT_API_SECRET:-$(openssl rand -hex 32)}"
 BOT_USERNAME="${BOT_USERNAME:?Задайте BOT_USERNAME}"
 WEBAPP_SHORT_NAME="${WEBAPP_SHORT_NAME:-predictliga}"
 DOMAIN="${DOMAIN:?Задайте DOMAIN (например predictapp.ru)}"
 ADMIN_USER_IDS="${ADMIN_USER_IDS:-}"
-WEBAPP_URL="https://${DOMAIN}"
-SERVER_URL="https://${DOMAIN}"
 PORT="${PORT:-3001}"
+WEBAPP_URL="https://${DOMAIN}"
+SERVER_URL="http://127.0.0.1:${PORT}"
+BOT_API_ALLOWED_IPS="${BOT_API_ALLOWED_IPS:-127.0.0.1,::1}"
 
 echo "==> Обновление системы"
 export DEBIAN_FRONTEND=noninteractive
@@ -46,6 +48,8 @@ fi
 echo "==> .env"
 cat > "$APP_DIR/.env" <<EOF
 BOT_TOKEN=${BOT_TOKEN}
+BOT_API_SECRET=${BOT_API_SECRET}
+BOT_API_ALLOWED_IPS=${BOT_API_ALLOWED_IPS}
 BOT_USERNAME=${BOT_USERNAME}
 WEBAPP_SHORT_NAME=${WEBAPP_SHORT_NAME}
 WEBAPP_URL=${WEBAPP_URL}

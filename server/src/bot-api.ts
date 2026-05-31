@@ -21,7 +21,6 @@ export function registerTelegramUser(body: {
   first_name: string;
   last_name?: string | null;
   username?: string | null;
-  photo_url?: string | null;
   startParam?: string;
 }) {
   const user = upsertUser({
@@ -29,7 +28,6 @@ export function registerTelegramUser(body: {
     first_name: body.first_name,
     last_name: body.last_name ?? undefined,
     username: body.username ?? undefined,
-    photo_url: body.photo_url ?? undefined,
   });
 
   if (body.startParam) {

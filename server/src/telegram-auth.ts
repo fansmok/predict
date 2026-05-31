@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { sanitizePhotoUrl } from './security.js';
 
 interface TelegramUser {
   id: number;
@@ -26,7 +27,7 @@ function parseTelegramUser(raw: unknown): TelegramUser | null {
 
   const lastName = clipString(u.last_name, 64);
   const username = clipString(u.username, 32);
-  const photoUrl = clipString(u.photo_url, 512);
+  const photoUrl = sanitizePhotoUrl(clipString(u.photo_url, 512));
 
   return {
     id,

@@ -8,6 +8,7 @@ BOT_USERNAME="${BOT_USERNAME:-predictliga_bot}"
 WEBAPP_SHORT_NAME="${WEBAPP_SHORT_NAME:-predictliga}"
 DOMAIN="${DOMAIN:-predictapp.ru}"
 ADMIN_USER_IDS="${ADMIN_USER_IDS:-}"
+PORT="${PORT:-3001}"
 
 cd "$APP_DIR"
 
@@ -16,13 +17,24 @@ if [[ -d .git ]]; then
 fi
 
 if [[ -n "$BOT_TOKEN" ]]; then
+  EXISTING_SECRET=""
+  EXISTING_ALLOWED_IPS=""
+  if [[ -f "$APP_DIR/.env" ]]; then
+    EXISTING_SECRET=$(grep '^BOT_API_SECRET=' "$APP_DIR/.env" | cut -d= -f2- || true)
+    EXISTING_ALLOWED_IPS=$(grep '^BOT_API_ALLOWED_IPS=' "$APP_DIR/.env" | cut -d= -f2- || true)
+  fi
+  BOT_API_SECRET="${BOT_API_SECRET:-${EXISTING_SECRET:-$(openssl rand -hex 32)}}"
+  BOT_API_ALLOWED_IPS="${BOT_API_ALLOWED_IPS:-${EXISTING_ALLOWED_IPS:-127.0.0.1,::1}}"
+
   cat > "$APP_DIR/.env" <<EOF
 BOT_TOKEN=${BOT_TOKEN}
+BOT_API_SECRET=${BOT_API_SECRET}
+BOT_API_ALLOWED_IPS=${BOT_API_ALLOWED_IPS}
 BOT_USERNAME=${BOT_USERNAME}
 WEBAPP_SHORT_NAME=${WEBAPP_SHORT_NAME}
 WEBAPP_URL=https://${DOMAIN}
-SERVER_URL=https://${DOMAIN}
-PORT=3001
+SERVER_URL=http://127.0.0.1:${PORT}
+PORT=${PORT}
 NODE_ENV=production
 DEV_MODE=false
 DISABLE_CRON=false

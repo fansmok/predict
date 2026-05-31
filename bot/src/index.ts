@@ -8,13 +8,36 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const token = process.env.BOT_TOKEN;
+const apiSecret = process.env.BOT_API_SECRET;
 const webAppUrlEnv = process.env.WEBAPP_URL ?? 'http://localhost:5173';
 const serverUrl = process.env.SERVER_URL ?? 'http://127.0.0.1:3001';
+const isProduction = process.env.NODE_ENV === 'production';
 
 if (!token || token === 'your_telegram_bot_token') {
   console.log('⚠️  BOT_TOKEN не задан. Бот не запущен.');
   console.log('   Создайте бота через @BotFather и добавьте токен в .env');
   process.exit(0);
+}
+
+if (!apiSecret || apiSecret === 'your_bot_api_secret') {
+  console.log('⚠️  BOT_API_SECRET не задан. Бот не запущен.');
+  console.log('   Сгенерируйте: openssl rand -hex 32');
+  console.log('   Добавьте в .env → BOT_API_SECRET=...');
+  process.exit(0);
+}
+
+if (isProduction && apiSecret.length < 32) {
+  console.error('[security] FATAL: BOT_API_SECRET должен быть мин. 32 символа в production');
+  process.exit(1);
+}
+
+if (isProduction && apiSecret === token) {
+  console.error('[security] FATAL: BOT_API_SECRET не должен совпадать с BOT_TOKEN');
+  process.exit(1);
+}
+
+if (isProduction && !serverUrl.startsWith('https://') && !serverUrl.startsWith('http://127.0.0.1')) {
+  console.warn('[security] Рекомендуется SERVER_URL=http://127.0.0.1:3001 для bot→server на том же хосте');
 }
 
 const bot = new Bot(token);
@@ -25,7 +48,7 @@ async function apiCall<T>(path: string, options?: RequestInit): Promise<T | null
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${apiSecret}`,
         ...(options?.headers ?? {}),
       },
     });
@@ -170,7 +193,7 @@ bot.command('start', async ctx => {
 
   await ctx.reply(
     `⚽ *Лига Прогнозов — ЧМ-2026*\n\n` +
-      `${from.first_name}, добро пожаловать!\n\n` +
+      `${escapeMarkdown(from.first_name)}, добро пожаловать!\n\n` +
       `Делайте прогнозы на матчи, собирайте fantasy-команду и соревнуйтесь с друзьями — в общем рейтинге или в своих приватных лигах.\n\n` +
       `Откройте приложение — матчи, рейтинг и ваша команда в одном месте.`,
     { parse_mode: 'Markdown', reply_markup: appKeyboard() }
@@ -247,7 +270,7 @@ bot.command('today', async ctx => {
         : ` · прогноз ${m.prediction}`
       : ' · ⚠️ нет прогноза';
     const score = m.score ? ` (${m.score})` : '';
-    return `${m.time} ${m.homeTeam} — ${m.awayTeam}${score}${pred}`;
+    return `${m.time} ${escapeMarkdown(m.homeTeam)} — ${escapeMarkdown(m.awayTeam)}${score}${pred}`;
   });
 
   await ctx.reply(
@@ -383,7 +406,7 @@ bot.command('rank', async ctx => {
   }
 
   const medals = ['🥇', '🥈', '🥉', '4.', '5.'];
-  const lines = leaders.map(l => `${medals[l.rank - 1] ?? `${l.rank}.`} ${l.name} — *${l.totalPoints}*`);
+  const lines = leaders.map(l => `${medals[l.rank - 1] ?? `${l.rank}.`} ${escapeMarkdown(l.name)} — *${l.totalPoints}*`);
 
   await ctx.reply(
     `🏆 *Топ-5 игроков*\n\n${lines.join('\n')}`,

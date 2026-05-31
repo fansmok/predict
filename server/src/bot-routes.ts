@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import { Router, Request, Response, NextFunction } from 'express';
 import {
   registerTelegramUser,
@@ -10,6 +9,15 @@ import {
   getLeagueInvitePreview,
 } from './bot-api.js';
 import { isAdminUser, logAdminAction } from './admins.js';
+import {
+  createBotApiIpAllowlistMiddleware,
+  createRateLimiter,
+  getBotApiSecret,
+  isDevAuthEnabled,
+  isProduction,
+  isValidBotApiSecret,
+  safeSecretEqual,
+} from './security.js';
 
 const router = Router();
 
@@ -19,26 +27,45 @@ function parseTelegramId(raw: unknown): number | null {
   return id;
 }
 
-function safeTokenEqual(expected: string, provided: string): boolean {
-  const a = Buffer.from(expected);
-  const b = Buffer.from(provided);
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+function isBotApiSecretAccepted(secret: string): boolean {
+  if (!secret) return false;
+  if (isProduction()) return isValidBotApiSecret(secret);
+  if (secret === 'your_bot_api_secret') return isDevAuthEnabled();
+  return secret.length > 0;
 }
 
 function botAuthMiddleware(req: Request, res: Response, next: NextFunction) {
-  const token = process.env.BOT_TOKEN;
+  const secret = getBotApiSecret();
   const auth = req.headers.authorization ?? '';
   const provided = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!token || token === 'your_telegram_bot_token' || !provided || !safeTokenEqual(token, provided)) {
+
+  if (!isBotApiSecretAccepted(secret) || !provided || !safeSecretEqual(secret, provided)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   next();
 }
 
+const botIpAllowlist = createBotApiIpAllowlistMiddleware();
+const botRegisterLimit = createRateLimiter({
+  windowMs: 60_000,
+  max: 60,
+  message: 'Слишком много запросов регистрации',
+});
+const botAnnounceTargetsLimit = createRateLimiter({
+  windowMs: 60_000,
+  max: 10,
+  message: 'Слишком много запросов списка рассылки',
+});
+const botAnnounceLimit = createRateLimiter({
+  windowMs: 60_000,
+  max: 5,
+  message: 'Слишком много запросов рассылки',
+});
+
+router.use(botIpAllowlist);
 router.use(botAuthMiddleware);
 
-router.post('/register', (req, res) => {
+router.post('/register', botRegisterLimit, (req, res) => {
   const id = parseTelegramId(req.body?.id);
   const first_name = typeof req.body?.first_name === 'string' ? req.body.first_name.trim().slice(0, 64) : '';
   if (id == null || !first_name) {
@@ -50,7 +77,6 @@ router.post('/register', (req, res) => {
     first_name,
     last_name: typeof req.body.last_name === 'string' ? req.body.last_name.slice(0, 64) : undefined,
     username: typeof req.body.username === 'string' ? req.body.username.slice(0, 32) : undefined,
-    photo_url: typeof req.body.photo_url === 'string' ? req.body.photo_url.slice(0, 512) : undefined,
     startParam: typeof req.body.startParam === 'string' ? req.body.startParam.slice(0, 256) : undefined,
   });
 
@@ -87,7 +113,7 @@ router.get('/league-invite', (req, res) => {
   res.json(preview);
 });
 
-router.get('/announce-targets', (req, res) => {
+router.get('/announce-targets', botAnnounceTargetsLimit, (req, res) => {
   const adminId = parseTelegramId(req.query.adminId);
   if (adminId == null || !isAdminUser(adminId)) {
     return res.status(403).json({ error: 'Forbidden' });
@@ -95,7 +121,7 @@ router.get('/announce-targets', (req, res) => {
   res.json({ userIds: getAllRegisteredUserIds() });
 });
 
-router.post('/announce', async (req, res) => {
+router.post('/announce', botAnnounceLimit, async (req, res) => {
   const adminId = parseTelegramId(req.body?.adminId);
   const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
 

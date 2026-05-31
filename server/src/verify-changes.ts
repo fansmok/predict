@@ -15,7 +15,7 @@ import { createLeague, joinLeagueByCode } from './leagues.js';
 import { resolveTournamentPickFields } from './tournament.js';
 import { isAdminUser, resetAdminIdsCache } from './admins.js';
 import { deleteLeagueByAdmin, deleteUserByAdmin } from './admin-moderation.js';
-import { parseMatchesGroupFilter, parseLeagueCode, parseUserIdList } from './security.js';
+import { parseMatchesGroupFilter, parseLeagueCode, parseUserIdList, isAllowedPhotoUrl, sanitizePhotoUrl, isValidBotApiSecret, safeSecretEqual } from './security.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
@@ -51,6 +51,18 @@ async function main() {
   assert(parseLeagueCode('ABCD1234') === 'ABCD1234', 'league code should parse');
   assert(parseLeagueCode('bad-code!') === null, 'invalid league code rejected');
   assert(parseUserIdList([1, 2, 2, -1, 1.5]).length === 2, 'user id list deduped and validated');
+
+  assert(isAllowedPhotoUrl('https://t.me/i/userpic/320/abc.jpg'), 'telegram photo url allowed');
+  assert(!isAllowedPhotoUrl('http://127.0.0.1/avatar.jpg'), 'localhost photo url rejected');
+  assert(!isAllowedPhotoUrl('https://evil.example/avatar.jpg'), 'external photo url rejected');
+  assert(sanitizePhotoUrl('https://t.me/i/userpic/320/abc.jpg') !== undefined, 'sanitize keeps valid url');
+  assert(sanitizePhotoUrl('https://evil.example/x') === undefined, 'sanitize drops invalid url');
+
+  assert(isValidBotApiSecret('a'.repeat(32)), '32-char bot api secret valid');
+  assert(!isValidBotApiSecret('your_bot_api_secret'), 'placeholder bot api secret invalid');
+  assert(!isValidBotApiSecret('short'), 'short bot api secret invalid');
+  assert(safeSecretEqual('abc', 'abc'), 'safeSecretEqual matches');
+  assert(!safeSecretEqual('abc', 'abd'), 'safeSecretEqual rejects mismatch');
 
   // H2: bot register + stats
   const testId = 999001;

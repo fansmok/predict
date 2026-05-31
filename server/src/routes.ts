@@ -56,6 +56,8 @@ import {
   parseMatchesGroupFilter,
   parseSearchQuery,
   parseUserIdList,
+  createRateLimiter,
+  createUserRateLimiter,
 } from './security.js';
 import {
   getMatchPoints,
@@ -102,6 +104,18 @@ const router = Router();
 
 /** Минимальный интервал между изменениями уже сохранённого прогноза (сек). Новые прогнозы — без ограничения. */
 const PREDICTION_UPDATE_COOLDOWN_SEC = 10;
+
+const avatarRateLimit = createRateLimiter({
+  windowMs: 60_000,
+  max: 30,
+  message: 'Слишком много запросов к аватарам',
+});
+
+const userActionRateLimit = createUserRateLimiter({
+  windowMs: 60_000,
+  max: 40,
+  message: 'Слишком много запросов к этому действию',
+});
 
 router.use('/bot', botRoutes);
 
@@ -360,7 +374,6 @@ router.get('/auth/me', authMiddleware, (req, res) => {
   res.json({
     user: {
       ...req.user,
-      isAdmin: isAdminUser(userId),
       isPlatinum: getPlatinumProgress(userId).isPlatinum,
       favoriteTeam: enrichFavoriteTeam(getUserFavoriteTeamId(userId)),
     },
@@ -388,6 +401,10 @@ router.get('/auth/me', authMiddleware, (req, res) => {
   });
 });
 
+router.get('/auth/admin-check', authMiddleware, (req, res) => {
+  res.json({ isAdmin: isAdminUser(req.user!.id) });
+});
+
 router.post('/profile/favorite-team', authMiddleware, (req, res) => {
   const { teamId } = req.body as { teamId?: string | null };
 
@@ -403,7 +420,7 @@ router.post('/profile/favorite-team', authMiddleware, (req, res) => {
 });
 
 /** Публичный прокси аватара (для <img>, без initData). Кэш на сервере + Telegram Bot API. */
-router.get('/users/:id/avatar', async (req, res) => {
+router.get('/users/:id/avatar', avatarRateLimit, async (req, res) => {
   const userId = parseUserId(req.params.id);
   if (!userId) return res.status(400).end();
 
@@ -475,7 +492,7 @@ router.get('/matches/:id', authMiddleware, (req, res) => {
   });
 });
 
-router.post('/predictions', authMiddleware, (req, res) => {
+router.post('/predictions', authMiddleware, userActionRateLimit, (req, res) => {
   const matchId = parseMatchId(req.body.matchId);
   const homeScore = parseScore(req.body.homeScore);
   const awayScore = parseScore(req.body.awayScore);
@@ -544,7 +561,7 @@ router.post('/predictions', authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
-router.post('/double-picks', authMiddleware, (req, res) => {
+router.post('/double-picks', authMiddleware, userActionRateLimit, (req, res) => {
   const matchId = parseMatchId(req.body?.matchId);
   if (matchId == null) {
     return res.status(400).json({ error: 'Invalid match id' });
@@ -569,7 +586,7 @@ router.post('/double-picks', authMiddleware, (req, res) => {
   res.json({ success: true, gameDay, matchId });
 });
 
-router.delete('/double-picks/:matchId', authMiddleware, (req, res) => {
+router.delete('/double-picks/:matchId', authMiddleware, userActionRateLimit, (req, res) => {
   const matchId = parseMatchId(req.params.matchId);
   if (matchId == null) return res.status(400).json({ error: 'Invalid match id' });
 
@@ -828,13 +845,13 @@ router.get('/friends', authMiddleware, (req, res) => {
   });
 });
 
-router.get('/friends/search', authMiddleware, (req, res) => {
+router.get('/friends/search', authMiddleware, userActionRateLimit, (req, res) => {
   const q = parseSearchQuery(req.query.q);
   const users = searchUsers(q, req.user!.id);
   res.json({ users });
 });
 
-router.post('/friends/invite', authMiddleware, async (req, res) => {
+router.post('/friends/invite', authMiddleware, userActionRateLimit, async (req, res) => {
   const { userIds } = req.body;
   if (!Array.isArray(userIds) || userIds.length === 0) {
     return res.status(400).json({ error: 'Выберите друзей' });
@@ -880,7 +897,7 @@ router.post('/leagues', authMiddleware, (req, res) => {
   }
 });
 
-router.post('/leagues/join', authMiddleware, (req, res) => {
+router.post('/leagues/join', authMiddleware, userActionRateLimit, (req, res) => {
   const code = parseLeagueCode(req.body?.code);
   if (!code) {
     return res.status(400).json({ error: 'Укажите код лиги' });
@@ -905,7 +922,7 @@ router.post('/leagues/join', authMiddleware, (req, res) => {
   }
 });
 
-router.post('/leagues/:id/invite', authMiddleware, async (req, res) => {
+router.post('/leagues/:id/invite', authMiddleware, userActionRateLimit, async (req, res) => {
   const leagueId = parseInt(String(req.params.id), 10);
   if (Number.isNaN(leagueId)) {
     return res.status(400).json({ error: 'Invalid league id' });
@@ -1003,11 +1020,11 @@ router.get('/rules', (_req, res) => {
   });
 });
 
-router.get('/admin/sync-status', authMiddleware, adminMiddleware, (_req, res) => {
+router.get('/admin/sync-status', authMiddleware, userActionRateLimit, adminMiddleware, (_req, res) => {
   res.json(getFootballSyncStatus());
 });
 
-router.post('/admin/sync-results', authMiddleware, adminMiddleware, async (req, res) => {
+router.post('/admin/sync-results', authMiddleware, userActionRateLimit, adminMiddleware, async (req, res) => {
   const userId = req.user!.id;
   try {
     const result = await syncPendingMatchesFromApi();
@@ -1022,7 +1039,7 @@ router.post('/admin/sync-results', authMiddleware, adminMiddleware, async (req, 
   }
 });
 
-router.post('/admin/sync-match/:matchId', authMiddleware, adminMiddleware, async (req, res) => {
+router.post('/admin/sync-match/:matchId', authMiddleware, userActionRateLimit, adminMiddleware, async (req, res) => {
   const userId = req.user!.id;
   const matchId = parseMatchId(req.params.matchId);
   if (matchId == null) return res.status(400).json({ error: 'Некорректный matchId' });
@@ -1047,7 +1064,7 @@ router.post('/admin/sync-match/:matchId', authMiddleware, adminMiddleware, async
   }
 });
 
-router.post('/admin/match-api-link', authMiddleware, adminMiddleware, async (req, res) => {
+router.post('/admin/match-api-link', authMiddleware, userActionRateLimit, adminMiddleware, async (req, res) => {
   const userId = req.user!.id;
   const matchId = parseMatchId(req.body.matchId);
   if (matchId == null) return res.status(400).json({ error: 'Некорректный matchId' });
@@ -1085,7 +1102,7 @@ router.post('/admin/match-api-link', authMiddleware, adminMiddleware, async (req
   }
 });
 
-router.post('/admin/match-result', authMiddleware, adminMiddleware, (req, res) => {
+router.post('/admin/match-result', authMiddleware, userActionRateLimit, adminMiddleware, (req, res) => {
   const userId = req.user!.id;
 
   const matchId = parseMatchId(req.body.matchId);
@@ -1135,7 +1152,7 @@ router.post('/admin/match-result', authMiddleware, adminMiddleware, (req, res) =
   res.json({ success: true, updated });
 });
 
-router.post('/admin/match-start', authMiddleware, adminMiddleware, (req, res) => {
+router.post('/admin/match-start', authMiddleware, userActionRateLimit, adminMiddleware, (req, res) => {
   const userId = req.user!.id;
 
   const matchId = parseMatchId(req.body.matchId);
@@ -1151,7 +1168,7 @@ router.post('/admin/match-start', authMiddleware, adminMiddleware, (req, res) =>
   res.json({ success: true, kickoff: pastKickoff });
 });
 
-router.get('/admin/match-fantasy/:matchId', authMiddleware, adminMiddleware, (req, res) => {
+router.get('/admin/match-fantasy/:matchId', authMiddleware, userActionRateLimit, adminMiddleware, (req, res) => {
   const matchId = parseMatchId(req.params.matchId);
   if (matchId == null) return res.status(400).json({ error: 'Некорректный matchId' });
   if (!getGroupMatch(matchId)) return res.status(404).json({ error: 'Матч не найден' });
@@ -1161,7 +1178,7 @@ router.get('/admin/match-fantasy/:matchId', authMiddleware, adminMiddleware, (re
   res.json(draft);
 });
 
-router.post('/admin/match-reset', authMiddleware, adminMiddleware, (req, res) => {
+router.post('/admin/match-reset', authMiddleware, userActionRateLimit, adminMiddleware, (req, res) => {
   const userId = req.user!.id;
 
   const matchId = parseMatchId(req.body.matchId);
@@ -1174,11 +1191,11 @@ router.post('/admin/match-reset', authMiddleware, adminMiddleware, (req, res) =>
   res.json({ success: true, kickoff: result.kickoff });
 });
 
-router.get('/admin/tournament-results', authMiddleware, adminMiddleware, (_req, res) => {
+router.get('/admin/tournament-results', authMiddleware, userActionRateLimit, adminMiddleware, (_req, res) => {
   res.json(getAdminTournamentState());
 });
 
-router.post('/admin/tournament-results', authMiddleware, adminMiddleware, (req, res) => {
+router.post('/admin/tournament-results', authMiddleware, userActionRateLimit, adminMiddleware, (req, res) => {
   const userId = req.user!.id;
 
   const validationError = validateTournamentResults(req.body);
@@ -1201,7 +1218,7 @@ router.post('/admin/tournament-results', authMiddleware, adminMiddleware, (req, 
   res.json({ success: true, updated });
 });
 
-router.post('/admin/squad-stats', authMiddleware, adminMiddleware, (req, res) => {
+router.post('/admin/squad-stats', authMiddleware, userActionRateLimit, adminMiddleware, (req, res) => {
   const userId = req.user!.id;
 
   const validated = validateSquadStats(req.body.matchId, req.body.stats);
@@ -1214,7 +1231,7 @@ router.post('/admin/squad-stats', authMiddleware, adminMiddleware, (req, res) =>
   res.json({ success: true, updated });
 });
 
-router.delete('/admin/leagues/:id', authMiddleware, adminMiddleware, (req, res) => {
+router.delete('/admin/leagues/:id', authMiddleware, userActionRateLimit, adminMiddleware, (req, res) => {
   const actorId = req.user!.id;
   const leagueId = parseInt(String(req.params.id), 10);
   if (!Number.isSafeInteger(leagueId) || leagueId <= 0) {
@@ -1232,7 +1249,7 @@ router.delete('/admin/leagues/:id', authMiddleware, adminMiddleware, (req, res) 
   }
 });
 
-router.delete('/admin/users/:userId', authMiddleware, adminMiddleware, (req, res) => {
+router.delete('/admin/users/:userId', authMiddleware, userActionRateLimit, adminMiddleware, (req, res) => {
   const actorId = req.user!.id;
   const targetUserId = parseUserId(req.params.userId);
   if (!targetUserId) {

@@ -57,6 +57,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const [doublePicks, setDoublePicks] = useState<Record<string, number>>({});
@@ -89,6 +90,7 @@ export default function App() {
       setError('');
       const results = await Promise.allSettled([
         api.getMe(),
+        api.checkAdmin(),
         api.getMatches(),
         api.getLeaderboard(),
         api.getRules(),
@@ -99,11 +101,14 @@ export default function App() {
         api.getLeagues(),
       ]);
 
-      const [meR, matchesR, leadersR, rulesR, tourR, tourOptR, squadR, squadOptR, leaguesR] = results;
+      const [meR, adminR, matchesR, leadersR, rulesR, tourR, tourOptR, squadR, squadOptR, leaguesR] = results;
 
       if (meR.status === 'fulfilled') {
         setUser(meR.value.user);
         setStats(meR.value.stats);
+      }
+      if (adminR.status === 'fulfilled') {
+        setIsAdmin(adminR.value.isAdmin);
       }
       if (matchesR.status === 'fulfilled') {
         setMatches(matchesR.value.matches);
@@ -284,8 +289,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (showAdmin && user && !user.isAdmin) setShowAdmin(false);
-  }, [showAdmin, user]);
+    if (showAdmin && !isAdmin) setShowAdmin(false);
+  }, [showAdmin, isAdmin]);
 
   useEffect(() => {
     if (tournament.locked || isTournamentPicksLocked(tournament, matches)) return;
@@ -395,7 +400,7 @@ export default function App() {
             </div>
           </div>
           <div className="header-actions">
-            {!showAdmin && !showRules && user?.isAdmin && (
+            {!showAdmin && !showRules && isAdmin && (
               <button
                 type="button"
                 className="header-admin-btn"
@@ -441,7 +446,7 @@ export default function App() {
         className="content"
         aria-label={showRules ? 'Правила' : showAdmin ? 'Администрирование' : TAB_TITLES[tab]}
       >
-        {showAdmin && user?.isAdmin ? (
+        {showAdmin && isAdmin ? (
           <AdminPage
             matches={matches}
             squadPlayers={squadOptions}
@@ -501,7 +506,7 @@ export default function App() {
           <TabPanel tab="friends" activeTab={tab}>
             <FriendsPage
               myId={user.id}
-              isAdmin={user.isAdmin}
+              isAdmin={isAdmin}
               isActive={tab === 'friends'}
               refreshKey={socialRefreshKey}
               onGoToLeaderboard={() => setTab('leaderboard')}
@@ -514,7 +519,7 @@ export default function App() {
             <LeaderboardPage
               globalLeaders={leaders}
               myId={user.id}
-              isAdmin={user.isAdmin}
+              isAdmin={isAdmin}
               myRank={stats.rank}
               myPoints={stats.totalPoints}
               stats={stats}
@@ -544,13 +549,14 @@ export default function App() {
             <ProfilePage
               user={user}
               stats={stats}
+              isAdmin={isAdmin}
               tournament={tournament}
               tournamentTeams={tournamentTeams}
               tournamentPlayers={tournamentPlayers}
               matches={matches}
               squad={squad}
               leagues={leagues}
-              onOpenAdmin={user.isAdmin ? () => setShowAdmin(true) : undefined}
+              onOpenAdmin={isAdmin ? () => setShowAdmin(true) : undefined}
               onSaveTournament={handleSaveTournament}
               onSaveFavoriteTeam={handleSaveFavoriteTeam}
             />
@@ -586,7 +592,7 @@ export default function App() {
         <UserPublicProfileModal
           userId={viewUserId}
           myId={user?.id}
-          isAdmin={user?.isAdmin}
+          isAdmin={isAdmin}
           tournamentTeams={tournamentTeams}
           tournamentPlayers={tournamentPlayers}
           onClose={() => setViewUserId(null)}

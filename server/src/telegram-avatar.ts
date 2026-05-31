@@ -1,4 +1,5 @@
 import { db } from './db.js';
+import { isAllowedPhotoUrl } from './security.js';
 
 const BOT_TOKEN = process.env.BOT_TOKEN ?? '';
 const HIT_TTL_MS = 6 * 60 * 60 * 1000;
@@ -28,6 +29,8 @@ async function tgGet<T>(method: string, params: Record<string, string | number>)
 async function fetchRemotePhoto(
   photoUrl: string
 ): Promise<{ buffer: Buffer; contentType: string } | null> {
+  if (!isAllowedPhotoUrl(photoUrl)) return null;
+
   try {
     const res = await fetch(photoUrl, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
@@ -46,7 +49,8 @@ function getStoredPhotoUrl(userId: number): string | null {
     | { photo_url: string | null }
     | undefined;
   const url = row?.photo_url?.trim();
-  return url || null;
+  if (!url || !isAllowedPhotoUrl(url)) return null;
+  return url;
 }
 
 async function tryStoredPhotoUrl(userId: number): Promise<{ buffer: Buffer; contentType: string } | null> {
