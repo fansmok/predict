@@ -23,7 +23,11 @@ fi
 export SSHPASS="${SSHPASS:?Задайте SSHPASS (root-пароль Timeweb)}"
 
 echo "==> Проверка SSH"
-sshpass -e ssh -o StrictHostKeyChecking=accept-new "$SERVER" "echo SSH OK"
+sshpass -e ssh \
+  -o StrictHostKeyChecking=accept-new \
+  -o ConnectTimeout=30 \
+  -o ServerAliveInterval=10 \
+  "$SERVER" "echo SSH OK"
 
 echo "==> Загрузка файлов"
 sshpass -e rsync -avz --delete \

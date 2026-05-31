@@ -16,6 +16,7 @@ if [[ -d .git ]]; then
   git pull origin main
 fi
 
+# Обновление .env только если передан BOT_TOKEN (деплой с Mac)
 if [[ -n "$BOT_TOKEN" ]]; then
   EXISTING_SECRET=""
   EXISTING_ALLOWED_IPS=""
@@ -41,6 +42,11 @@ DISABLE_CRON=false
 ADMIN_USER_IDS=${ADMIN_USER_IDS}
 EOF
   chmod 600 "$APP_DIR/.env"
+fi
+
+if [[ -z "$BOT_TOKEN" && -f "$APP_DIR/deploy/server-update.sh" ]]; then
+  echo "==> BOT_TOKEN не передан — полное обновление через server-update.sh"
+  exec bash "$APP_DIR/deploy/server-update.sh"
 fi
 
 npm install
