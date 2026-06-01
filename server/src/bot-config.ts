@@ -1,10 +1,11 @@
-const BOT_TOKEN = process.env.BOT_TOKEN ?? '';
-const ENV_USERNAME = (process.env.BOT_USERNAME ?? '').replace(/^@/, '');
+function envBotUsername(): string {
+  return (process.env.BOT_USERNAME ?? '').replace(/^@/, '').trim();
+}
 
-let resolvedUsername = ENV_USERNAME;
+let resolvedUsername = '';
 
 export function getBotUsername(): string {
-  return resolvedUsername || 'your_bot';
+  return resolvedUsername || envBotUsername() || 'your_bot';
 }
 
 export function getWebAppShortName(): string {
@@ -16,17 +17,19 @@ export function getWebAppShortName(): string {
 
 /** Подтягивает @username бота из BOT_USERNAME или Telegram getMe. */
 export async function initBotUsername(): Promise<string> {
-  if (ENV_USERNAME) {
-    resolvedUsername = ENV_USERNAME;
+  const fromEnv = envBotUsername();
+  if (fromEnv) {
+    resolvedUsername = fromEnv;
     return resolvedUsername;
   }
 
-  if (!BOT_TOKEN || BOT_TOKEN === 'your_telegram_bot_token') {
+  const botToken = process.env.BOT_TOKEN ?? '';
+  if (!botToken || botToken === 'your_telegram_bot_token') {
     return getBotUsername();
   }
 
   try {
-    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
     const data = (await res.json()) as { ok?: boolean; result?: { username?: string } };
     if (data.ok && data.result?.username) {
       resolvedUsername = data.result.username;

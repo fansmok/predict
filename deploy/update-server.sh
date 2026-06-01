@@ -51,8 +51,22 @@ fi
 
 NODE_ENV=development npm install --include=dev
 npm run build
-pm2 restart liga-server liga-bot
+pm2 restart liga-server liga-bot || {
+  pm2 delete liga-server liga-bot 2>/dev/null || true
+  pm2 start npm --name liga-server -- start
+  pm2 start npm --name liga-bot -- run start --workspace=bot
+}
 pm2 save
 
-echo "OK: https://${DOMAIN} | pm2 status:"
+echo ""
+echo "==> Проверка бота"
 pm2 status
+BOT_OK=$(pm2 jlist 2>/dev/null | grep -c '"liga-bot".*"status":"online"' || echo 0)
+if [[ "$BOT_OK" -lt 1 ]]; then
+  echo "WARN: liga-bot не online — смотрите: pm2 logs liga-bot --lines 40"
+else
+  echo "liga-bot online"
+fi
+curl -sf "https://api.telegram.org/bot${BOT_TOKEN:-$(grep '^BOT_TOKEN=' .env | cut -d= -f2-)}/getWebhookInfo" | head -c 200 || true
+echo ""
+echo "OK: https://${DOMAIN}"

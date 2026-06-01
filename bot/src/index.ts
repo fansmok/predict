@@ -160,44 +160,74 @@ const HELP_TEXT =
   `🌍 Турнирные picks — до *80* очков\n\n` +
   `Прогноз закрывается при старте матча.`;
 
+async function safeReply(
+  ctx: { reply: (text: string, opts?: object) => Promise<unknown> },
+  text: string,
+  opts?: object
+) {
+  try {
+    await ctx.reply(text, opts);
+  } catch (e) {
+    console.error('[reply] Markdown failed, plain text:', e);
+    const plain = text.replace(/\\([_*\[`])/g, '$1').replace(/\*/g, '');
+    await ctx.reply(plain, { reply_markup: (opts as { reply_markup?: unknown })?.reply_markup });
+  }
+}
+
 bot.command('start', async ctx => {
   const payload = ctx.match?.trim() ?? '';
   const from = ctx.from!;
 
-  await registerUser(from, payload || undefined);
+  try {
+    await registerUser(from, payload || undefined);
 
-  if (payload.startsWith('ref_')) {
-    await ctx.reply(
+    if (payload.startsWith('ref_')) {
+      await safeReply(
+        ctx,
+        `⚽ *Лига Прогнозов — ЧМ-2026*\n\n` +
+          `Вас пригласили в игру! Делайте прогнозы, собирайте fantasy-команду и соревнуйтесь с друзьями.\n\n` +
+          `Нажмите кнопку ниже, чтобы начать!`,
+        { parse_mode: 'Markdown', reply_markup: appKeyboard(payload) }
+      );
+      return;
+    }
+
+    if (payload.startsWith('league_')) {
+      const preview = await apiCall<{ leagueName: string; inviterName: string }>(
+        `/league-invite?startParam=${encodeURIComponent(payload)}`
+      );
+      const inviteText = preview
+        ? buildLeagueInviteReply(preview.inviterName, preview.leagueName)
+        : `🏆 *Приватная лига*\n\n` +
+          `Вас приглашают в закрытую лигу прогнозистов!\n` +
+          `Рейтинг виден только участникам лиги.\n\n` +
+          `Откройте приложение, чтобы вступить.`;
+
+      await safeReply(ctx, inviteText, {
+        parse_mode: 'Markdown',
+        reply_markup: appKeyboard(payload),
+      });
+      return;
+    }
+
+    await safeReply(
+      ctx,
       `⚽ *Лига Прогнозов — ЧМ-2026*\n\n` +
-        `Вас пригласили в игру! Делайте прогнозы, собирайте fantasy-команду и соревнуйтесь с друзьями.\n\n` +
-        `Нажмите кнопку ниже, чтобы начать!`,
-      { parse_mode: 'Markdown', reply_markup: appKeyboard(payload) }
+        `${escapeMarkdown(from.first_name)}, добро пожаловать!\n\n` +
+        `Делайте прогнозы на матчи, собирайте fantasy-команду и соревнуйтесь с друзьями — в общем рейтинге или в своих приватных лигах.\n\n` +
+        `Откройте приложение — матчи, рейтинг и ваша команда в одном месте.`,
+      { parse_mode: 'Markdown', reply_markup: appKeyboard() }
     );
-    return;
+  } catch (e) {
+    console.error('[start] handler failed:', e);
+    try {
+      await ctx.reply('⚽ Лига Прогнозов — нажмите кнопку ниже, чтобы открыть приложение.', {
+        reply_markup: appKeyboard(payload || undefined),
+      });
+    } catch (e2) {
+      console.error('[start] fallback failed:', e2);
+    }
   }
-
-  if (payload.startsWith('league_')) {
-    const preview = await apiCall<{ leagueName: string; inviterName: string }>(
-      `/league-invite?startParam=${encodeURIComponent(payload)}`
-    );
-    const inviteText = preview
-      ? buildLeagueInviteReply(preview.inviterName, preview.leagueName)
-      : `🏆 *Приватная лига*\n\n` +
-        `Вас приглашают в закрытую лигу прогнозистов!\n` +
-        `Рейтинг виден только участникам лиги.\n\n` +
-        `Откройте приложение, чтобы вступить.`;
-
-    await ctx.reply(inviteText, { parse_mode: 'Markdown', reply_markup: appKeyboard(payload) });
-    return;
-  }
-
-  await ctx.reply(
-    `⚽ *Лига Прогнозов — ЧМ-2026*\n\n` +
-      `${escapeMarkdown(from.first_name)}, добро пожаловать!\n\n` +
-      `Делайте прогнозы на матчи, собирайте fantasy-команду и соревнуйтесь с друзьями — в общем рейтинге или в своих приватных лигах.\n\n` +
-      `Откройте приложение — матчи, рейтинг и ваша команда в одном месте.`,
-    { parse_mode: 'Markdown', reply_markup: appKeyboard() }
-  );
 });
 
 bot.command('help', async ctx => {
@@ -425,17 +455,45 @@ bot.catch(err => {
 });
 
 async function setCommands() {
-  await bot.api.setMyCommands([
-    { command: 'start', description: 'Открыть приложение' },
-    { command: 'stats', description: 'Мои очки и место' },
-    { command: 'today', description: 'Матчи сегодня' },
-    { command: 'rank', description: 'Топ-5 игроков' },
-    { command: 'help', description: 'Справка и правила' },
-  ]);
+  try {
+    await bot.api.setMyCommands([
+      { command: 'start', description: 'Открыть приложение' },
+      { command: 'stats', description: 'Мои очки и место' },
+      { command: 'today', description: 'Матчи сегодня' },
+      { command: 'rank', description: 'Топ-5 игроков' },
+      { command: 'help', description: 'Справка и правила' },
+    ]);
+  } catch (e) {
+    console.warn('[startup] setMyCommands пропущен (сеть/Telegram):', e);
+  }
+}
+
+async function verifyServerLink(): Promise<void> {
+  try {
+    const res = await fetch(`${serverUrl}/api/config`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) {
+      console.warn(`[startup] Server ${serverUrl} returned ${res.status}`);
+      return;
+    }
+    const probe = await apiCall<{ leaders: unknown[] }>('/leaders?limit=1');
+    if (probe === null) {
+      console.error(
+        '[startup] /api/bot недоступен — проверьте BOT_API_SECRET на сервере и в боте (должны совпадать)'
+      );
+    } else {
+      console.log('[startup] Связь с API сервера OK');
+    }
+  } catch (e) {
+    console.error('[startup] Не удалось достучаться до сервера:', serverUrl, e);
+  }
 }
 
 console.log('🤖 Telegram bot starting...');
-void setCommands();
 bot.start({
-  onStart: botInfo => console.log(`Bot @${botInfo.username} is running → server ${serverUrl}`),
+  onStart: botInfo => {
+    console.log(`Bot @${botInfo.username} is running → server ${serverUrl}`);
+    console.log(`WEBAPP_URL=${webAppUrlEnv}`);
+    void setCommands();
+    void verifyServerLink();
+  },
 });

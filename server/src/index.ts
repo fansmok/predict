@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+import './load-env.js';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -17,7 +17,6 @@ import { getBotUsername, initBotUsername } from './bot-config.js';
 import { recalculateAllFinishedMatchPoints } from './admin.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 assertSafeProductionConfig();
 
