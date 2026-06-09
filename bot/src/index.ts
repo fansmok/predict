@@ -3,6 +3,11 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Bot, InlineKeyboard } from 'grammy';
+import {
+  replyWithAppKeyboard,
+  sendMessageWithAppKeyboard,
+  setDefaultMenuWebApp,
+} from './app-keyboard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
@@ -115,16 +120,6 @@ function buildLeagueInviteReply(inviterName: string, leagueName: string): string
   );
 }
 
-/** Ссылка t.me/.../predictliga — Telegram отклоняет inline web_app на predictapp.ru (BUTTON_TYPE_INVALID). */
-function appKeyboard(startParam?: string) {
-  const botUsername = (process.env.BOT_USERNAME ?? 'predictliga_bot').replace(/^@/, '');
-  const shortName = process.env.WEBAPP_SHORT_NAME ?? 'predictliga';
-  const miniAppLink = startParam
-    ? `https://t.me/${botUsername}/${shortName}?startapp=${encodeURIComponent(startParam)}`
-    : `https://t.me/${botUsername}/${shortName}`;
-  return new InlineKeyboard().url('🏆 Открыть Лигу Прогнозов', miniAppLink);
-}
-
 const HELP_TEXT =
   `*Лига Прогнозов — ЧМ-2026*\n\n` +
   `*Команды:*\n` +
@@ -142,16 +137,17 @@ const HELP_TEXT =
   `Прогноз закрывается при старте матча.`;
 
 async function safeReply(
-  ctx: { reply: (text: string, opts?: object) => Promise<unknown> },
+  ctx: Parameters<typeof replyWithAppKeyboard>[0],
   text: string,
-  opts?: object
+  opts?: Record<string, unknown>,
+  startParam?: string
 ) {
   try {
-    await ctx.reply(text, opts);
+    await replyWithAppKeyboard(ctx, text, opts, startParam);
   } catch (e) {
     console.error('[reply] Markdown failed, plain text:', e);
     const plain = text.replace(/\\([_*\[`])/g, '$1').replace(/\*/g, '');
-    await ctx.reply(plain, { reply_markup: (opts as { reply_markup?: unknown })?.reply_markup });
+    await replyWithAppKeyboard(ctx, plain, undefined, startParam);
   }
 }
 
@@ -168,7 +164,8 @@ bot.command('start', async ctx => {
         `⚽ *Лига Прогнозов — ЧМ-2026*\n\n` +
           `Вас пригласили в игру! Делайте прогнозы, собирайте fantasy-команду и соревнуйтесь с друзьями.\n\n` +
           `Нажмите кнопку ниже, чтобы начать!`,
-        { parse_mode: 'Markdown', reply_markup: appKeyboard(payload) }
+        { parse_mode: 'Markdown' },
+        payload
       );
       return;
     }
@@ -184,10 +181,7 @@ bot.command('start', async ctx => {
           `Рейтинг виден только участникам лиги.\n\n` +
           `Откройте приложение, чтобы вступить.`;
 
-      await safeReply(ctx, inviteText, {
-        parse_mode: 'Markdown',
-        reply_markup: appKeyboard(payload),
-      });
+      await safeReply(ctx, inviteText, { parse_mode: 'Markdown' }, payload);
       return;
     }
 
@@ -197,14 +191,17 @@ bot.command('start', async ctx => {
         `${escapeMarkdown(from.first_name)}, добро пожаловать!\n\n` +
         `Делайте прогнозы на матчи, собирайте fantasy-команду и соревнуйтесь с друзьями — в общем рейтинге или в своих приватных лигах.\n\n` +
         `Откройте приложение — матчи, рейтинг и ваша команда в одном месте.`,
-      { parse_mode: 'Markdown', reply_markup: appKeyboard() }
+      { parse_mode: 'Markdown' }
     );
   } catch (e) {
     console.error('[start] handler failed:', e);
     try {
-      await ctx.reply('⚽ Лига Прогнозов — нажмите кнопку ниже, чтобы открыть приложение.', {
-        reply_markup: appKeyboard(payload || undefined),
-      });
+      await replyWithAppKeyboard(
+        ctx,
+        '⚽ Лига Прогнозов — нажмите кнопку ниже, чтобы открыть приложение.',
+        undefined,
+        payload || undefined
+      );
     } catch (e2) {
       console.error('[start] fallback failed:', e2);
     }
@@ -213,7 +210,7 @@ bot.command('start', async ctx => {
 
 bot.command('help', async ctx => {
   await registerUser(ctx.from!);
-  await ctx.reply(HELP_TEXT, { parse_mode: 'Markdown', reply_markup: appKeyboard() });
+  await replyWithAppKeyboard(ctx, HELP_TEXT, { parse_mode: 'Markdown' });
 });
 
 bot.command('stats', async ctx => {
@@ -232,15 +229,16 @@ bot.command('stats', async ctx => {
   } }>(`/stats/${from.id}`);
 
   if (!data?.registered || !data.stats) {
-    await ctx.reply(
-      'Вы ещё не в игре. Откройте приложение и сделайте первый прогноз!',
-      { reply_markup: appKeyboard() }
+    await replyWithAppKeyboard(
+      ctx,
+      'Вы ещё не в игре. Откройте приложение и сделайте первый прогноз!'
     );
     return;
   }
 
   const s = data.stats;
-  await ctx.reply(
+  await replyWithAppKeyboard(
+    ctx,
     `📊 *Ваша статистика*\n\n` +
       `🏅 Место: *#${s.rank}*\n` +
       `⭐ Очки: *${s.totalPoints}*\n\n` +
@@ -248,7 +246,7 @@ bot.command('stats', async ctx => {
       `🌍 Турнир: ${s.tournamentPoints}\n` +
       `👥 Fantasy: ${s.squadPoints}\n\n` +
       `📝 Прогнозов: ${s.predictionsCount} · Точных: ${s.exactScores}`,
-    { parse_mode: 'Markdown', reply_markup: appKeyboard() }
+    { parse_mode: 'Markdown' }
   );
 });
 
@@ -270,7 +268,7 @@ bot.command('today', async ctx => {
   const matches = data?.matches ?? [];
 
   if (matches.length === 0) {
-    await ctx.reply('📅 Сегодня матчей нет.', { reply_markup: appKeyboard() });
+    await replyWithAppKeyboard(ctx, '📅 Сегодня матчей нет.');
     return;
   }
 
@@ -284,9 +282,10 @@ bot.command('today', async ctx => {
     return `${m.time} ${escapeMarkdown(m.homeTeam)} — ${escapeMarkdown(m.awayTeam)}${score}${pred}`;
   });
 
-  await ctx.reply(
+  await replyWithAppKeyboard(
+    ctx,
     `📅 *Матчи сегодня*\n\n${lines.join('\n')}`,
-    { parse_mode: 'Markdown', reply_markup: appKeyboard() }
+    { parse_mode: 'Markdown' }
   );
 });
 
@@ -362,9 +361,7 @@ bot.callbackQuery(/^announce_ok:(.+)$/, async ctx => {
   for (let i = 0; i < targets.userIds.length; i++) {
     const userId = targets.userIds[i];
     try {
-      await bot.api.sendMessage(userId, body, {
-        reply_markup: appKeyboard(),
-      });
+      await sendMessageWithAppKeyboard(bot.api, userId, body);
       sent++;
     } catch (e) {
       failed++;
@@ -412,23 +409,24 @@ bot.command('rank', async ctx => {
 
   const leaders = data?.leaders ?? [];
   if (leaders.length === 0) {
-    await ctx.reply('Рейтинг пока пуст.', { reply_markup: appKeyboard() });
+    await replyWithAppKeyboard(ctx, 'Рейтинг пока пуст.');
     return;
   }
 
   const medals = ['🥇', '🥈', '🥉', '4.', '5.'];
   const lines = leaders.map(l => `${medals[l.rank - 1] ?? `${l.rank}.`} ${escapeMarkdown(l.name)} — *${l.totalPoints}*`);
 
-  await ctx.reply(
+  await replyWithAppKeyboard(
+    ctx,
     `🏆 *Топ-5 игроков*\n\n${lines.join('\n')}`,
-    { parse_mode: 'Markdown', reply_markup: appKeyboard() }
+    { parse_mode: 'Markdown' }
   );
 });
 
 bot.on('message:text', async ctx => {
   if (ctx.message.text.startsWith('/')) return;
   await registerUser(ctx.from!);
-  await ctx.reply('Используйте /start или /help', { reply_markup: appKeyboard() });
+  await replyWithAppKeyboard(ctx, 'Используйте /start или /help');
 });
 
 bot.catch(err => {
@@ -475,6 +473,7 @@ bot.start({
     console.log(`Bot @${botInfo.username} is running → server ${serverUrl}`);
     console.log(`WEBAPP_URL=${webAppUrlEnv}`);
     void setCommands();
+    void setDefaultMenuWebApp(bot.api);
     void verifyServerLink();
   },
 });

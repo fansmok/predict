@@ -62,20 +62,26 @@ function buildOpenAppLink(startParam?: string): string {
   return `https://t.me/${bot}`;
 }
 
-function buildReplyMarkup(
-  buttonText: string,
-  buttonUrl: string
-): { inline_keyboard: Array<Array<{ text: string; web_app?: { url: string }; url?: string }>> } | undefined {
-  if (canUseWebAppButton(buttonUrl)) {
-    return { inline_keyboard: [[{ text: buttonText, web_app: { url: buttonUrl } }]] };
+type InlineMarkup = {
+  inline_keyboard: Array<Array<{ text: string; web_app?: { url: string }; url?: string }>>;
+};
+
+function buildReplyMarkupCandidates(buttonText: string, buttonUrl: string): InlineMarkup[] {
+  const candidates: InlineMarkup[] = [];
+  if (canUseWebAppButton(WEBAPP_URL)) {
+    candidates.push({ inline_keyboard: [[{ text: buttonText, web_app: { url: WEBAPP_URL } }]] });
   }
-  return { inline_keyboard: [[{ text: buttonText, url: buildOpenAppLink() }]] };
+  if (canUseWebAppButton(buttonUrl) && buttonUrl !== WEBAPP_URL) {
+    candidates.push({ inline_keyboard: [[{ text: buttonText, web_app: { url: buttonUrl } }]] });
+  }
+  candidates.push({ inline_keyboard: [[{ text: buttonText, url: buildOpenAppLink() }]] });
+  return candidates;
 }
 
 async function callSendMessage(
   chatId: number,
   text: string,
-  replyMarkup?: ReturnType<typeof buildReplyMarkup>
+  replyMarkup?: InlineMarkup
 ): Promise<TelegramSendResult> {
   if (!BOT_TOKEN || BOT_TOKEN === 'your_telegram_bot_token') {
     return { ok: false, error: 'BOT_TOKEN не задан на сервере' };
@@ -110,20 +116,16 @@ export async function sendTelegramMessage(
   buttonText = '🏆 Открыть Лигу Прогнозов',
   buttonUrl = WEBAPP_URL
 ): Promise<boolean> {
-  const markup = buildReplyMarkup(buttonText, buttonUrl);
-  let result = await callSendMessage(chatId, text, markup);
+  const markups = buildReplyMarkupCandidates(buttonText, buttonUrl);
 
-  if (!result.ok && markup?.inline_keyboard[0]?.[0]?.web_app) {
-    result = await callSendMessage(chatId, text, {
-      inline_keyboard: [[{ text: buttonText, url: buildOpenAppLink() }]],
-    });
+  for (let i = 0; i < markups.length; i++) {
+    const result = await callSendMessage(chatId, text, markups[i]);
+    if (result.ok) return true;
+    if (!result.error.includes('BUTTON_TYPE_INVALID')) return false;
   }
 
-  if (!result.ok && markup) {
-    result = await callSendMessage(chatId, text);
-  }
-
-  return result.ok;
+  const plain = await callSendMessage(chatId, text);
+  return plain.ok;
 }
 
 function buildInviteText(inviterName: string): string {
