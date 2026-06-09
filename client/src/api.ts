@@ -1,37 +1,23 @@
+import { getTelegramInitData } from './telegram-init';
 import { captureStartParam } from './utils';
 
+export { hasTelegramInitData, waitForTelegramInitData } from './telegram-init';
+
 const API_BASE = '/api';
-const REQUEST_TIMEOUT_MS = 10_000;
-const PING_TIMEOUT_MS = 6_000;
-
-const VPN_HINT =
-  ' Если включён VPN — отключите его или выберите сервер в России/СНГ и откройте приложение заново.';
-
-/** На мобильном Telegram initData иногда появляется с задержкой. */
-export async function waitForTelegramInitData(maxMs = 3000): Promise<void> {
-  const deadline = Date.now() + maxMs;
-  while (Date.now() < deadline) {
-    if (window.Telegram?.WebApp?.initData) return;
-    await new Promise<void>(resolve => window.setTimeout(resolve, 50));
-  }
-}
-
-export function hasTelegramInitData(): boolean {
-  return Boolean(window.Telegram?.WebApp?.initData);
-}
+const REQUEST_TIMEOUT_MS = 15_000;
+const PING_TIMEOUT_MS = 8_000;
 
 export function networkErrorMessage(reason?: unknown): string {
   if (reason instanceof DOMException && reason.name === 'AbortError') {
-    return `Сервер не отвечает (таймаут).${VPN_HINT}`;
+    return 'Сервер не отвечает. Проверьте интернет и откройте приложение заново.';
   }
   if (reason instanceof TypeError) {
-    return `Нет связи с predictapp.ru.${VPN_HINT}`;
+    return 'Нет связи с сервером. Подождите несколько секунд и попробуйте снова.';
   }
-  return `Не удаётся подключиться к серверу.${VPN_HINT}`;
+  return 'Не удаётся подключиться к серверу. Откройте приложение заново из бота.';
 }
 
-/** Проверка сети без авторизации — помогает отличить VPN/сеть от ошибки бота. */
-export async function pingServer(): Promise<boolean> {
+async function pingOnce(): Promise<boolean> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {
@@ -44,14 +30,25 @@ export async function pingServer(): Promise<boolean> {
   }
 }
 
+/** Проверка сети без авторизации (несколько попыток — VPN иногда медленный). */
+export async function pingServer(attempts = 3): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    if (await pingOnce()) return true;
+    if (i < attempts - 1) {
+      await new Promise<void>(resolve => window.setTimeout(resolve, 700));
+    }
+  }
+  return false;
+}
+
 function getHeaders(): HeadersInit {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
 
-  const tg = window.Telegram?.WebApp;
-  if (tg?.initData) {
-    headers['X-Telegram-Init-Data'] = tg.initData;
+  const initData = getTelegramInitData();
+  if (initData) {
+    headers['X-Telegram-Init-Data'] = initData;
   }
 
   const startParam = captureStartParam();
@@ -76,10 +73,10 @@ async function request<T>(path: string, options?: RequestInit, attempt = 0): Pro
     });
   } catch (e) {
     const retryable =
-      attempt === 0 && (e instanceof TypeError || (e instanceof DOMException && e.name === 'AbortError'));
+      attempt < 2 && (e instanceof TypeError || (e instanceof DOMException && e.name === 'AbortError'));
     if (retryable) {
       window.clearTimeout(timeoutId);
-      await new Promise<void>(resolve => window.setTimeout(resolve, 600));
+      await new Promise<void>(resolve => window.setTimeout(resolve, 800));
       return request<T>(path, options, attempt + 1);
     }
     throw new Error(networkErrorMessage(e));
@@ -91,7 +88,7 @@ async function request<T>(path: string, options?: RequestInit, attempt = 0): Pro
     const err = await res.json().catch(() => ({ error: 'Request failed' }));
     const message = err.error || `HTTP ${res.status}`;
     if (res.status === 401 || message === 'Invalid Telegram auth' || message === 'Unauthorized') {
-      throw new Error(`Ошибка авторизации Telegram.${VPN_HINT}`);
+      throw new Error('Ошибка авторизации Telegram. Закройте и откройте приложение из @predictliga_bot.');
     }
     throw new Error(message);
   }

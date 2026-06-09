@@ -220,6 +220,8 @@ export function isTournamentComplete(data: import('./types').TournamentData): bo
   return !!(winner && second && third && topScorer);
 }
 
+import { getTelegramInitData } from './telegram-init';
+
 const START_PARAM_STORAGE_KEY = 'liga_start_param';
 
 export function getStartParam(): string {
@@ -232,6 +234,12 @@ export function getStartParam(): string {
       const fromInit = new URLSearchParams(tg.initData).get('start_param');
       if (fromInit?.trim()) return fromInit.trim();
     }
+  }
+
+  const initData = getTelegramInitData();
+  if (initData) {
+    const fromCached = new URLSearchParams(initData).get('start_param');
+    if (fromCached?.trim()) return fromCached.trim();
   }
 
   const fromUrlParams = (params: URLSearchParams): string =>

@@ -302,5 +302,6 @@ export function getTeam(id: string): Team {
 }
 
 export function flagUrl(code: string): string {
-  return `https://flagcdn.com/w80/${code}.png`;
+  const safe = code.replace(/[^a-z]/gi, '').toLowerCase().slice(0, 3) || 'un';
+  return `/api/flags/${safe}.png`;
 }

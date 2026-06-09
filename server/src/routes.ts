@@ -125,6 +125,25 @@ router.get('/config', (_req, res) => {
   });
 });
 
+router.get('/flags/:code.png', async (req, res) => {
+  const code = String(req.params.code).replace(/[^a-z]/gi, '').toLowerCase().slice(0, 3) || 'un';
+  try {
+    const upstream = await fetch(`https://flagcdn.com/w80/${code}.png`, {
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!upstream.ok) {
+      res.status(upstream.status).end();
+      return;
+    }
+    const body = Buffer.from(await upstream.arrayBuffer());
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    res.send(body);
+  } catch {
+    res.status(502).end();
+  }
+});
+
 declare global {
   namespace Express {
     interface Request {

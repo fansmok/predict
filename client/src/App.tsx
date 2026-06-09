@@ -142,8 +142,7 @@ export default function App() {
       await waitForTelegramInitData();
       if (!hasTelegramInitData()) {
         setError(
-          'Нет авторизации Telegram. Закройте приложение и откройте снова из @predictliga_bot.' +
-            ' Если включён VPN — отключите или смените сервер.'
+          'Нет авторизации Telegram. Полностью закройте Mini App и откройте снова из @predictliga_bot.'
         );
         return;
       }
@@ -201,7 +200,7 @@ export default function App() {
           setError(
             current =>
               current ||
-              `Долгая загрузка — проверьте интернет и откройте приложение заново из Telegram.${' Если включён VPN — отключите его или выберите сервер в России/СНГ.'}`
+              'Долгая загрузка — проверьте интернет и откройте приложение заново из Telegram.'
           );
           return false;
         }
