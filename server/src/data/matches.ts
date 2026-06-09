@@ -301,7 +301,14 @@ export function getTeam(id: string): Team {
   return TEAMS[id] ?? { id, name: id, code: 'un' };
 }
 
+/** Код для flagcdn: ISO alpha-2 (de) или составной gb-eng / gb-sct. */
+export function normalizeFlagCode(code: string): string {
+  const trimmed = code.trim().toLowerCase();
+  if (/^[a-z]{2}-[a-z]{3}$/.test(trimmed)) return trimmed;
+  const alpha2 = trimmed.replace(/[^a-z]/gi, '').slice(0, 2);
+  return alpha2 || 'un';
+}
+
 export function flagUrl(code: string): string {
-  const safe = code.replace(/[^a-z]/gi, '').toLowerCase().slice(0, 3) || 'un';
-  return `/api/flags/${safe}.png`;
+  return `/api/flags/${normalizeFlagCode(code)}.png`;
 }

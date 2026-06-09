@@ -89,7 +89,14 @@ import {
   getMatchFantasyDraft,
   MAX_SCORE,
 } from './admin.js';
-import { getParticipantTeams, getTeam, flagUrl, isParticipantTeamId, TEAMS } from './data/matches.js';
+import {
+  getParticipantTeams,
+  getTeam,
+  flagUrl,
+  isParticipantTeamId,
+  normalizeFlagCode,
+  TEAMS,
+} from './data/matches.js';
 import { compareTeamsByElite } from './data/squad-groups.js';
 import { isPredictableStage, stagesSqlIn } from './match-stages.js';
 import {
@@ -126,7 +133,7 @@ router.get('/config', (_req, res) => {
 });
 
 router.get('/flags/:code.png', async (req, res) => {
-  const code = String(req.params.code).replace(/[^a-z]/gi, '').toLowerCase().slice(0, 3) || 'un';
+  const code = normalizeFlagCode(String(req.params.code));
   try {
     const upstream = await fetch(`https://flagcdn.com/w80/${code}.png`, {
       signal: AbortSignal.timeout(8_000),
