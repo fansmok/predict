@@ -76,21 +76,6 @@ async function registerUser(
   });
 }
 
-function webAppUrl(startParam?: string): string {
-  if (!startParam) return webAppUrlEnv;
-  const url = new URL(webAppUrlEnv);
-  url.searchParams.set('tgWebAppStartParam', startParam);
-  return url.toString();
-}
-
-function canUseWebAppButton(url: string): boolean {
-  try {
-    return new URL(url).protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
 function loadAdminIds(): Set<number> {
   const ids = new Set<number>();
   for (const part of (process.env.ADMIN_USER_IDS ?? '').split(/[,;\s]+/)) {
@@ -130,12 +115,8 @@ function buildLeagueInviteReply(inviterName: string, leagueName: string): string
   );
 }
 
+/** Ссылка t.me/.../predictliga — Telegram отклоняет inline web_app на predictapp.ru (BUTTON_TYPE_INVALID). */
 function appKeyboard(startParam?: string) {
-  const url = webAppUrl(startParam);
-  if (canUseWebAppButton(url)) {
-    return new InlineKeyboard().webApp('🏆 Открыть Лигу Прогнозов', url);
-  }
-
   const botUsername = (process.env.BOT_USERNAME ?? 'predictliga_bot').replace(/^@/, '');
   const shortName = process.env.WEBAPP_SHORT_NAME ?? 'predictliga';
   const miniAppLink = startParam
