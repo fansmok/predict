@@ -142,7 +142,7 @@ export default function App() {
       await waitForTelegramInitData();
       if (!hasTelegramInitData()) {
         setError(
-          'Нет авторизации Telegram. Полностью закройте Mini App и откройте снова из @predictliga_bot.'
+          'Нет авторизации Telegram. Закройте Mini App полностью (смахните вниз) и откройте снова из @predictliga_bot — на телефоне это сбрасывает кэш.'
         );
         return;
       }

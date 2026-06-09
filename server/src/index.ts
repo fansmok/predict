@@ -111,8 +111,35 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 });
 
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
-app.use(express.static(clientDist));
+
+function setStaticCacheHeaders(res: express.Response, filePath: string): void {
+  const normalized = filePath.replace(/\\/g, '/');
+  if (normalized.endsWith('/index.html')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    return;
+  }
+  if (normalized.includes('/assets/')) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    return;
+  }
+  if (normalized.endsWith('/telegram-web-app.js')) {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  }
+}
+
+app.use(
+  express.static(clientDist, {
+    index: false,
+    setHeaders: setStaticCacheHeaders,
+  })
+);
+
 app.get('*', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(path.join(clientDist, 'index.html'), err => {
     if (err) res.status(404).json({ message: 'Frontend not built. Run npm run dev:client' });
   });

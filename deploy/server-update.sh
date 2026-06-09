@@ -64,6 +64,11 @@ echo "==> npm install + build"
 NODE_ENV=development npm install --include=dev
 npm run build
 
+echo "==> nginx cache (mobile WebView)"
+if [[ -f "$APP_DIR/deploy/patch-nginx-cache.sh" ]]; then
+  bash "$APP_DIR/deploy/patch-nginx-cache.sh" || echo "WARN: nginx cache patch skipped"
+fi
+
 echo "==> PM2"
 if ! pm2 describe liga-server &>/dev/null; then
   echo "    первый запуск PM2"

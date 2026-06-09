@@ -1,7 +1,6 @@
-/** Локальная копия — не зависит от доступности telegram.org (важно для VPN). */
-const LOCAL_SDK_URL = '/telegram-web-app.js';
+const LOCAL_SDK_URL = '/telegram-web-app.js?v=59';
 const REMOTE_SDK_URL = 'https://telegram.org/js/telegram-web-app.js?59';
-const SCRIPT_TIMEOUT_MS = 6_000;
+const SCRIPT_TIMEOUT_MS = 5_000;
 
 function loadScript(src: string): Promise<boolean> {
   if (window.Telegram?.WebApp) return Promise.resolve(true);
@@ -23,12 +22,13 @@ function loadScript(src: string): Promise<boolean> {
   });
 }
 
-/** Сначала same-origin SDK, затем запасной URL Telegram. */
-export async function loadTelegramSdk(): Promise<void> {
-  if (window.Telegram?.WebApp) return;
+/** Не блокирует UI — можно вызывать без await. */
+export function loadTelegramSdk(): Promise<void> {
+  if (window.Telegram?.WebApp) return Promise.resolve();
 
-  await loadScript(LOCAL_SDK_URL);
-  if (window.Telegram?.WebApp) return;
-
-  await loadScript(REMOTE_SDK_URL);
+  return (async () => {
+    await loadScript(LOCAL_SDK_URL);
+    if (window.Telegram?.WebApp) return;
+    await loadScript(REMOTE_SDK_URL);
+  })();
 }

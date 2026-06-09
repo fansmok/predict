@@ -1,4 +1,4 @@
-import { getTelegramInitData } from './telegram-init';
+import { clearCachedInitData, getTelegramInitData } from './telegram-init';
 import { captureStartParam } from './utils';
 
 export { hasTelegramInitData, waitForTelegramInitData } from './telegram-init';
@@ -88,7 +88,10 @@ async function request<T>(path: string, options?: RequestInit, attempt = 0): Pro
     const err = await res.json().catch(() => ({ error: 'Request failed' }));
     const message = err.error || `HTTP ${res.status}`;
     if (res.status === 401 || message === 'Invalid Telegram auth' || message === 'Unauthorized') {
-      throw new Error('Ошибка авторизации Telegram. Закройте и откройте приложение из @predictliga_bot.');
+      clearCachedInitData();
+      throw new Error(
+        'Сессия устарела. Полностью закройте Mini App (смахните вниз) и откройте снова из @predictliga_bot.'
+      );
     }
     throw new Error(message);
   }
@@ -339,6 +342,7 @@ declare global {
       WebApp: {
         initData: string;
         initDataUnsafe: Record<string, unknown>;
+        platform?: string;
         ready: () => void;
         expand: () => void;
         close: () => void;

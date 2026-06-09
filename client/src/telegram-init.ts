@@ -1,6 +1,17 @@
 const INIT_DATA_STORAGE_KEY = 'liga_tg_init_data';
 
-/** initData из hash/query — работает даже если telegram.org заблокирован (VPN). */
+export function isInitDataFresh(initData: string): boolean {
+  if (!initData) return false;
+  try {
+    const authDate = parseInt(new URLSearchParams(initData).get('auth_date') ?? '0', 10);
+    if (!Number.isFinite(authDate) || authDate <= 0) return false;
+    return Math.floor(Date.now() / 1000) - authDate < 86_400;
+  } catch {
+    return false;
+  }
+}
+
+/** initData из hash/query — Telegram передаёт при открытии Mini App. */
 export function parseInitDataFromLocation(): string {
   try {
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -21,8 +32,21 @@ export function parseInitDataFromLocation(): string {
   return '';
 }
 
+/** Кэш Telegram SDK: sessionStorage['__telegram__initParams']. */
+export function parseInitDataFromTelegramStorage(): string {
+  try {
+    const raw = sessionStorage.getItem('__telegram__initParams');
+    if (!raw) return '';
+    const parsed = JSON.parse(raw) as { tgWebAppData?: string };
+    const data = parsed?.tgWebAppData;
+    return typeof data === 'string' ? data.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
 function cacheInitData(value: string): void {
-  if (!value) return;
+  if (!value || !isInitDataFresh(value)) return;
   try {
     sessionStorage.setItem(INIT_DATA_STORAGE_KEY, value);
   } catch {
@@ -30,33 +54,61 @@ function cacheInitData(value: string): void {
   }
 }
 
-/** Единый источник initData: SDK → URL → sessionStorage. */
-export function getTelegramInitData(): string {
-  const fromSdk = window.Telegram?.WebApp?.initData?.trim();
-  if (fromSdk) {
-    cacheInitData(fromSdk);
-    return fromSdk;
-  }
-
-  const fromUrl = parseInitDataFromLocation().trim();
-  if (fromUrl) {
-    cacheInitData(fromUrl);
-    return fromUrl;
-  }
-
+export function clearCachedInitData(): void {
   try {
-    return sessionStorage.getItem(INIT_DATA_STORAGE_KEY)?.trim() ?? '';
+    sessionStorage.removeItem(INIT_DATA_STORAGE_KEY);
   } catch {
-    return '';
+    /* ignore */
   }
+}
+
+/** Сохранить initData из URL как можно раньше (до загрузки SDK/бандла). */
+export function primeInitDataFromUrl(): void {
+  const fromUrl = parseInitDataFromLocation().trim();
+  if (fromUrl && isInitDataFresh(fromUrl)) {
+    cacheInitData(fromUrl);
+  }
+}
+
+export function isMobileTelegramPlatform(): boolean {
+  const platform = window.Telegram?.WebApp?.platform?.toLowerCase() ?? '';
+  if (platform === 'ios' || platform === 'android') return true;
+  return /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+/** Единый источник initData: SDK → URL → Telegram cache → свой cache (только свежие). */
+export function getTelegramInitData(): string {
+  const candidates = [
+    window.Telegram?.WebApp?.initData?.trim() ?? '',
+    parseInitDataFromLocation().trim(),
+    parseInitDataFromTelegramStorage(),
+    (() => {
+      try {
+        return sessionStorage.getItem(INIT_DATA_STORAGE_KEY)?.trim() ?? '';
+      } catch {
+        return '';
+      }
+    })(),
+  ];
+
+  for (const data of candidates) {
+    if (data && isInitDataFresh(data)) {
+      cacheInitData(data);
+      return data;
+    }
+  }
+
+  clearCachedInitData();
+  return '';
 }
 
 export function hasTelegramInitData(): boolean {
   return getTelegramInitData().length > 0;
 }
 
-export async function waitForTelegramInitData(maxMs = 5000): Promise<void> {
-  const deadline = Date.now() + maxMs;
+export async function waitForTelegramInitData(maxMs?: number): Promise<void> {
+  const ms = maxMs ?? (isMobileTelegramPlatform() ? 12_000 : 5_000);
+  const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (hasTelegramInitData()) return;
     await new Promise<void>(resolve => window.setTimeout(resolve, 50));
