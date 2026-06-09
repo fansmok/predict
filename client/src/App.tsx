@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef, startTransition } from 'react';
-import { api, waitForTelegramInitData } from './api';
+import { api, hasTelegramInitData, networkErrorMessage, pingServer, waitForTelegramInitData } from './api';
 import { Match, User, UserStats, Leader, Rule, Tab, TournamentData, TournamentOption, SquadData, SquadPlayerOption, LeagueSummary } from './types';
 import { BottomNav } from './components/BottomNav';
 import { MatchesPage } from './pages/MatchesPage';
@@ -132,7 +132,21 @@ export default function App() {
   const loadData = useCallback(async () => {
     try {
       setError('');
+
+      const reachable = await pingServer();
+      if (!reachable) {
+        setError(networkErrorMessage());
+        return;
+      }
+
       await waitForTelegramInitData();
+      if (!hasTelegramInitData()) {
+        setError(
+          'Нет авторизации Telegram. Закройте приложение и откройте снова из @predictliga_bot.' +
+            ' Если включён VPN — отключите или смените сервер.'
+        );
+        return;
+      }
 
       const [meR, matchesR] = await Promise.allSettled([api.getMe(), api.getMatches()]);
 
@@ -151,7 +165,7 @@ export default function App() {
         setError(reason);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка загрузки');
+      setError(e instanceof Error ? e.message : networkErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -186,7 +200,8 @@ export default function App() {
         if (prev) {
           setError(
             current =>
-              current || 'Долгая загрузка — проверьте сеть и откройте приложение заново из Telegram'
+              current ||
+              `Долгая загрузка — проверьте интернет и откройте приложение заново из Telegram.${' Если включён VPN — отключите его или выберите сервер в России/СНГ.'}`
           );
           return false;
         }

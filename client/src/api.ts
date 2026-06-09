@@ -1,14 +1,46 @@
 import { captureStartParam } from './utils';
 
 const API_BASE = '/api';
-const REQUEST_TIMEOUT_MS = 12_000;
+const REQUEST_TIMEOUT_MS = 10_000;
+const PING_TIMEOUT_MS = 6_000;
+
+const VPN_HINT =
+  ' Если включён VPN — отключите его или выберите сервер в России/СНГ и откройте приложение заново.';
 
 /** На мобильном Telegram initData иногда появляется с задержкой. */
-export async function waitForTelegramInitData(maxMs = 5000): Promise<void> {
+export async function waitForTelegramInitData(maxMs = 3000): Promise<void> {
   const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
     if (window.Telegram?.WebApp?.initData) return;
     await new Promise<void>(resolve => window.setTimeout(resolve, 50));
+  }
+}
+
+export function hasTelegramInitData(): boolean {
+  return Boolean(window.Telegram?.WebApp?.initData);
+}
+
+export function networkErrorMessage(reason?: unknown): string {
+  if (reason instanceof DOMException && reason.name === 'AbortError') {
+    return `Сервер не отвечает (таймаут).${VPN_HINT}`;
+  }
+  if (reason instanceof TypeError) {
+    return `Нет связи с predictapp.ru.${VPN_HINT}`;
+  }
+  return `Не удаётся подключиться к серверу.${VPN_HINT}`;
+}
+
+/** Проверка сети без авторизации — помогает отличить VPN/сеть от ошибки бота. */
+export async function pingServer(): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE}/config`, { signal: controller.signal, cache: 'no-store' });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }
 
@@ -30,7 +62,7 @@ function getHeaders(): HeadersInit {
   return headers;
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(path: string, options?: RequestInit, attempt = 0): Promise<T> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -39,20 +71,29 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
       signal: controller.signal,
+      cache: 'no-store',
       headers: { ...getHeaders(), ...options?.headers },
     });
   } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') {
-      throw new Error('Превышено время ожидания ответа сервера');
+    const retryable =
+      attempt === 0 && (e instanceof TypeError || (e instanceof DOMException && e.name === 'AbortError'));
+    if (retryable) {
+      window.clearTimeout(timeoutId);
+      await new Promise<void>(resolve => window.setTimeout(resolve, 600));
+      return request<T>(path, options, attempt + 1);
     }
-    throw e;
+    throw new Error(networkErrorMessage(e));
   } finally {
     window.clearTimeout(timeoutId);
   }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Request failed' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    const message = err.error || `HTTP ${res.status}`;
+    if (res.status === 401 || message === 'Invalid Telegram auth' || message === 'Unauthorized') {
+      throw new Error(`Ошибка авторизации Telegram.${VPN_HINT}`);
+    }
+    throw new Error(message);
   }
 
   const contentType = res.headers.get('content-type') ?? '';
