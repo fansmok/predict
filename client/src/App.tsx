@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef, startTransition } from 'react';
-import { api } from './api';
+import { api, waitForTelegramInitData } from './api';
 import { Match, User, UserStats, Leader, Rule, Tab, TournamentData, TournamentOption, SquadData, SquadPlayerOption, LeagueSummary } from './types';
 import { BottomNav } from './components/BottomNav';
 import { MatchesPage } from './pages/MatchesPage';
@@ -85,72 +85,80 @@ export default function App() {
   /** Вкладки, уже отрисованные хотя бы раз — не размонтируем при переключении. */
   const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set(['matches']));
 
+  const loadSquadOptions = useCallback(async () => {
+    try {
+      const res = await api.getSquadOptions();
+      setSquadOptions(res.players ?? []);
+      setSquadOptionsError(
+        res.players?.length ? '' : 'Каталог игроков пуст — перезапустите сервер'
+      );
+    } catch (e) {
+      setSquadOptionsError(
+        e instanceof Error ? e.message : 'Не удалось загрузить игроков'
+      );
+    }
+  }, []);
+
+  const loadSecondaryData = useCallback(async () => {
+    const results = await Promise.allSettled([
+      api.checkAdmin(),
+      api.getLeaderboard(),
+      api.getRules(),
+      api.getTournamentPicks(),
+      api.getTournamentOptions(),
+      api.getSquad(),
+      api.getLeagues(),
+    ]);
+
+    const [adminR, leadersR, rulesR, tourR, tourOptR, squadR, leaguesR] = results;
+
+    if (adminR.status === 'fulfilled') setIsAdmin(adminR.value.isAdmin);
+    if (leadersR.status === 'fulfilled') setLeaders(leadersR.value.leaders);
+    if (rulesR.status === 'fulfilled') setRules(rulesR.value.rules);
+    if (tourR.status === 'fulfilled') setTournament(tourR.value);
+    if (tourOptR.status === 'fulfilled') {
+      setTournamentTeams(tourOptR.value.teams);
+      setTournamentPlayers(tourOptR.value.players);
+    }
+    if (squadR.status === 'fulfilled') setSquad(squadR.value);
+    if (leaguesR.status === 'fulfilled') {
+      setLeagues(leaguesR.value.leagues);
+      setCanCreateLeague(leaguesR.value.canCreateLeague);
+      setOwnedLeagueCount(leaguesR.value.ownedLeagueCount);
+      setMaxOwnedLeagues(leaguesR.value.maxOwnedLeagues);
+    }
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       setError('');
-      const results = await Promise.allSettled([
-        api.getMe(),
-        api.checkAdmin(),
-        api.getMatches(),
-        api.getLeaderboard(),
-        api.getRules(),
-        api.getTournamentPicks(),
-        api.getTournamentOptions(),
-        api.getSquad(),
-        api.getSquadOptions(),
-        api.getLeagues(),
-      ]);
+      await waitForTelegramInitData();
 
-      const [meR, adminR, matchesR, leadersR, rulesR, tourR, tourOptR, squadR, squadOptR, leaguesR] = results;
+      const [meR, matchesR] = await Promise.allSettled([api.getMe(), api.getMatches()]);
 
       if (meR.status === 'fulfilled') {
         setUser(meR.value.user);
         setStats(meR.value.stats);
       }
-      if (adminR.status === 'fulfilled') {
-        setIsAdmin(adminR.value.isAdmin);
-      }
       if (matchesR.status === 'fulfilled') {
         setMatches(matchesR.value.matches);
         setDoublePicks(matchesR.value.doublePicks ?? {});
       }
-      if (leadersR.status === 'fulfilled') setLeaders(leadersR.value.leaders);
-      if (rulesR.status === 'fulfilled') setRules(rulesR.value.rules);
-      if (tourR.status === 'fulfilled') setTournament(tourR.value);
-      if (tourOptR.status === 'fulfilled') {
-        setTournamentTeams(tourOptR.value.teams);
-        setTournamentPlayers(tourOptR.value.players);
-      }
-      if (squadR.status === 'fulfilled') setSquad(squadR.value);
-      if (squadOptR.status === 'fulfilled') {
-        setSquadOptions(squadOptR.value.players ?? []);
-        setSquadOptionsError(
-          squadOptR.value.players?.length ? '' : 'Каталог игроков пуст — перезапустите сервер'
-        );
-      } else {
-        setSquadOptionsError(
-          squadOptR.reason instanceof Error
-            ? squadOptR.reason.message
-            : 'Не удалось загрузить игроков'
-        );
-      }
-      if (leaguesR.status === 'fulfilled') {
-        setLeagues(leaguesR.value.leagues);
-        setCanCreateLeague(leaguesR.value.canCreateLeague);
-        setOwnedLeagueCount(leaguesR.value.ownedLeagueCount);
-        setMaxOwnedLeagues(leaguesR.value.maxOwnedLeagues);
-      }
 
-      const failed = results.filter(r => r.status === 'rejected');
-      if (failed.length === results.length) {
-        setError('Не удалось загрузить данные');
+      if (meR.status === 'rejected' && matchesR.status === 'rejected') {
+        const reason =
+          meR.reason instanceof Error ? meR.reason.message : 'Не удалось загрузить данные';
+        setError(reason);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка загрузки');
     } finally {
       setLoading(false);
     }
-  }, []);
+
+    void loadSecondaryData();
+    void loadSquadOptions();
+  }, [loadSecondaryData, loadSquadOptions]);
 
   const refreshMatchesAndMe = useCallback(async () => {
     const [matchesR, meR] = await Promise.allSettled([api.getMatches(), api.getMe()]);
@@ -165,9 +173,28 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    api.bootstrap().catch(() => {});
-    loadData();
+    void (async () => {
+      await waitForTelegramInitData();
+      api.bootstrap().catch(() => {});
+      await loadData();
+    })();
   }, [loadData]);
+
+  useEffect(() => {
+    const watchdog = window.setTimeout(() => {
+      setLoading(prev => {
+        if (prev) {
+          setError(
+            current =>
+              current || 'Долгая загрузка — проверьте сеть и откройте приложение заново из Telegram'
+          );
+          return false;
+        }
+        return prev;
+      });
+    }, 18_000);
+    return () => window.clearTimeout(watchdog);
+  }, []);
 
   useEffect(() => {
     if (!inviteBanner) return;

@@ -1,6 +1,16 @@
 import { captureStartParam } from './utils';
 
 const API_BASE = '/api';
+const REQUEST_TIMEOUT_MS = 12_000;
+
+/** На мобильном Telegram initData иногда появляется с задержкой. */
+export async function waitForTelegramInitData(maxMs = 5000): Promise<void> {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    if (window.Telegram?.WebApp?.initData) return;
+    await new Promise<void>(resolve => window.setTimeout(resolve, 50));
+  }
+}
 
 function getHeaders(): HeadersInit {
   const headers: Record<string, string> = {
@@ -21,10 +31,24 @@ function getHeaders(): HeadersInit {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: { ...getHeaders(), ...options?.headers },
-  });
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: { ...getHeaders(), ...options?.headers },
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new Error('Превышено время ожидания ответа сервера');
+    }
+    throw e;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Request failed' }));

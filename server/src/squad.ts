@@ -315,7 +315,7 @@ export function getGlobalSquadPlayerRanking(): GlobalSquadPlayerRanking {
   return { top, losers };
 }
 
-export function getSquadOptions() {
+function buildSquadOptionsList() {
   return SQUAD_PLAYERS.map(p => {
     const team = getTeam(p.teamId);
     return {
@@ -332,4 +332,13 @@ export function getSquadOptions() {
       a.teamName.localeCompare(b.teamName, 'ru') ||
       compareByPositionThenName(a, b)
   );
+}
+
+let cachedSquadOptions: ReturnType<typeof buildSquadOptionsList> | null = null;
+
+export function getSquadOptions() {
+  if (!cachedSquadOptions) {
+    cachedSquadOptions = buildSquadOptionsList();
+  }
+  return cachedSquadOptions;
 }
