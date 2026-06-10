@@ -48,7 +48,6 @@ export function UserAvatar({
   const sources = [proxySrc, photoUrl].filter((s): s is string => !!s);
   const imageSrc = sources[fallbackStep] ?? null;
   const eager = variant === 'profile';
-  const fadePhoto = variant !== 'profile';
 
   useEffect(() => {
     setPhotoFailed(false);
@@ -81,16 +80,12 @@ export function UserAvatar({
     setPhotoFailed(true);
   };
 
-  const imgClass = fadePhoto
-    ? photoLoaded
-      ? 'is-loaded'
-      : ''
-    : 'is-loaded';
+  const imgClass = photoLoaded ? 'is-loaded' : '';
 
   const content = (
     <>
       <div className="user-avatar-photo" aria-hidden="true">
-        {!showPhoto && <span>{getInitials(firstName, lastName)}</span>}
+        {(!showPhoto || !photoLoaded) && <span>{getInitials(firstName, lastName)}</span>}
         {showPhoto && (
           <img
             ref={imgRef}

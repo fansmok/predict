@@ -112,6 +112,7 @@ export function TournamentPicks({ data, teams, players, matches, embedded, hideH
       next.topScorer = id;
     }
 
+    const prevDraft = { ...draft };
     setDraft(next);
     setExpanded(null);
     setSearch('');
@@ -124,6 +125,8 @@ export function TournamentPicks({ data, teams, players, matches, embedded, hideH
         thirdTeamId: next.third || undefined,
         topScorerPlayerId: next.topScorer || undefined,
       });
+    } catch {
+      setDraft(prevDraft);
     } finally {
       setSaving(false);
     }

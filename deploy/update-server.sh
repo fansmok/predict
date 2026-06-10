@@ -58,6 +58,16 @@ pm2 restart liga-server liga-bot || {
 }
 pm2 save
 
+echo "==> Health check"
+sleep 2
+code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${PORT}/api/config" || echo "000")
+echo "    /api/config → HTTP $code"
+if [[ "$code" != "200" ]]; then
+  echo "ERROR: сервер не отвечает"
+  pm2 logs liga-server --lines 30 --nostream || true
+  exit 1
+fi
+
 echo ""
 echo "==> Проверка бота"
 pm2 status

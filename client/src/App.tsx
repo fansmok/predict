@@ -1,5 +1,13 @@
 import { useState, useMemo, useCallback, useEffect, useRef, startTransition } from 'react';
-import { api, hasTelegramInitData, networkErrorMessage, pingServer, waitForTelegramInitData } from './api';
+import { clearAppLoadWatchdog } from './boot-watchdog';
+import {
+  api,
+  hasTelegramInitData,
+  networkErrorMessage,
+  pingServer,
+  waitForTelegramInitData,
+} from './api';
+import { syncInitDataFromSdk } from './telegram-init';
 import { Match, User, UserStats, Leader, Rule, Tab, TournamentData, TournamentOption, SquadData, SquadPlayerOption, LeagueSummary } from './types';
 import { BottomNav } from './components/BottomNav';
 import { MatchesPage } from './pages/MatchesPage';
@@ -80,8 +88,11 @@ export default function App() {
   const [leagueToOpenId, setLeagueToOpenId] = useState<number | null>(null);
   const [leaderboardResetKey, setLeaderboardResetKey] = useState(0);
   const [inviteBanner, setInviteBanner] = useState('');
+  const [picksLoadError, setPicksLoadError] = useState('');
   const [socialRefreshKey, setSocialRefreshKey] = useState(0);
   const contentRef = useRef<HTMLElement>(null);
+  const statsRef = useRef<UserStats | null>(null);
+  const picksLoadGen = useRef(0);
   /** Вкладки, уже отрисованные хотя бы раз — не размонтируем при переключении. */
   const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(() => new Set(['matches']));
 
@@ -99,28 +110,87 @@ export default function App() {
     }
   }, []);
 
+  const loadUserPicks = useCallback(async (): Promise<boolean> => {
+    const gen = ++picksLoadGen.current;
+
+    const tryLoad = async <T,>(fn: () => Promise<T>, attempts = 5): Promise<T | null> => {
+      for (let i = 0; i < attempts; i++) {
+        try {
+          return await fn();
+        } catch (e) {
+          console.warn('[loadUserPicks] retry', i + 1, e);
+          if (i < attempts - 1) {
+            await new Promise<void>(resolve => window.setTimeout(resolve, 800 * (i + 1)));
+          }
+        }
+      }
+      return null;
+    };
+
+    const [squadData, tourData, tourOpt] = await Promise.all([
+      tryLoad(() => api.getSquad()),
+      tryLoad(() => api.getTournamentPicks()),
+      tryLoad(() => api.getTournamentOptions()),
+    ]);
+
+    if (gen !== picksLoadGen.current) return false;
+
+    let ok = true;
+    if (squadData) {
+      setSquad(squadData);
+    } else {
+      ok = false;
+    }
+    if (tourData) {
+      setTournament(tourData);
+    } else {
+      ok = false;
+    }
+    if (tourOpt) {
+      setTournamentTeams(tourOpt.teams);
+      setTournamentPlayers(tourOpt.players);
+    } else {
+      ok = false;
+    }
+
+    const s = statsRef.current;
+    const missingSquad = !squadData && (s?.hasSquad || (s?.squadPoints ?? 0) > 0);
+    const missingTour =
+      !tourData && (s?.hasTournamentPicks || (s?.tournamentPoints ?? 0) > 0);
+
+    if (!ok) {
+      const parts: string[] = [];
+      if (missingSquad) parts.push('состав');
+      if (missingTour) parts.push('прогнозы на турнир');
+      const detail = parts.length ? ` (${parts.join(', ')})` : '';
+      setPicksLoadError(
+        `Не удалось загрузить данные${detail}. Нажмите «Обновить» или подождите — повторим автоматически.`
+      );
+      if (missingSquad || missingTour) {
+        window.setTimeout(() => {
+          if (gen === picksLoadGen.current) void loadUserPicks();
+        }, 4000);
+      }
+    } else {
+      setPicksLoadError('');
+    }
+
+    return ok;
+  }, []);
+
   const loadSecondaryData = useCallback(async () => {
     const results = await Promise.allSettled([
       api.checkAdmin(),
       api.getLeaderboard(),
       api.getRules(),
-      api.getTournamentPicks(),
-      api.getTournamentOptions(),
-      api.getSquad(),
       api.getLeagues(),
     ]);
 
-    const [adminR, leadersR, rulesR, tourR, tourOptR, squadR, leaguesR] = results;
+    const [adminR, leadersR, rulesR, leaguesR] = results;
 
     if (adminR.status === 'fulfilled') setIsAdmin(adminR.value.isAdmin);
     if (leadersR.status === 'fulfilled') setLeaders(leadersR.value.leaders);
     if (rulesR.status === 'fulfilled') setRules(rulesR.value.rules);
-    if (tourR.status === 'fulfilled') setTournament(tourR.value);
-    if (tourOptR.status === 'fulfilled') {
-      setTournamentTeams(tourOptR.value.teams);
-      setTournamentPlayers(tourOptR.value.players);
-    }
-    if (squadR.status === 'fulfilled') setSquad(squadR.value);
     if (leaguesR.status === 'fulfilled') {
       setLeagues(leaguesR.value.leagues);
       setCanCreateLeague(leaguesR.value.canCreateLeague);
@@ -130,16 +200,14 @@ export default function App() {
   }, []);
 
   const loadData = useCallback(async () => {
+    let bootOk = false;
     try {
       setError('');
 
-      const reachable = await pingServer();
-      if (!reachable) {
-        setError(networkErrorMessage());
-        return;
-      }
+      syncInitDataFromSdk();
+      const [reachable] = await Promise.all([pingServer(), waitForTelegramInitData()]);
+      syncInitDataFromSdk();
 
-      await waitForTelegramInitData();
       if (!hasTelegramInitData()) {
         setError(
           'Нет авторизации Telegram. Закройте Mini App полностью (смахните вниз) и откройте снова из @predictliga_bot — на телефоне это сбрасывает кэш.'
@@ -147,31 +215,54 @@ export default function App() {
         return;
       }
 
+      if (!reachable) {
+        setError('Медленное соединение — загружаем данные…');
+      }
+
+      api.bootstrap().catch(() => {});
+
       const [meR, matchesR] = await Promise.allSettled([api.getMe(), api.getMatches()]);
 
       if (meR.status === 'fulfilled') {
         setUser(meR.value.user);
         setStats(meR.value.stats);
+        statsRef.current = meR.value.stats;
+      } else {
+        const reason =
+          meR.reason instanceof Error ? meR.reason.message : 'Не удалось загрузить профиль';
+        setError(reason);
+        return;
       }
+
       if (matchesR.status === 'fulfilled') {
         setMatches(matchesR.value.matches);
         setDoublePicks(matchesR.value.doublePicks ?? {});
       }
 
-      if (meR.status === 'rejected' && matchesR.status === 'rejected') {
+      await loadUserPicks();
+
+      if (matchesR.status === 'rejected') {
         const reason =
-          meR.reason instanceof Error ? meR.reason.message : 'Не удалось загрузить данные';
+          matchesR.reason instanceof Error ? matchesR.reason.message : 'Не удалось загрузить матчи';
         setError(reason);
+      }
+
+      bootOk = true;
+      if (matchesR.status === 'fulfilled') {
+        setError(prev => (prev === 'Медленное соединение — загружаем данные…' ? '' : prev));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : networkErrorMessage(e));
     } finally {
       setLoading(false);
+      if (bootOk) clearAppLoadWatchdog();
     }
 
-    void loadSecondaryData();
-    void loadSquadOptions();
-  }, [loadSecondaryData, loadSquadOptions]);
+    if (bootOk) {
+      void loadSecondaryData();
+      void loadSquadOptions();
+    }
+  }, [loadSecondaryData, loadSquadOptions, loadUserPicks]);
 
   const refreshMatchesAndMe = useCallback(async () => {
     const [matchesR, meR] = await Promise.allSettled([api.getMatches(), api.getMe()]);
@@ -182,33 +273,72 @@ export default function App() {
     if (meR.status === 'fulfilled') {
       setUser(meR.value.user);
       setStats(meR.value.stats);
+      statsRef.current = meR.value.stats;
     }
   }, []);
 
+  const bootStarted = useRef(false);
+
   useEffect(() => {
-    void (async () => {
-      await waitForTelegramInitData();
-      api.bootstrap().catch(() => {});
-      await loadData();
-    })();
+    if (bootStarted.current) return;
+    bootStarted.current = true;
+    void loadData();
   }, [loadData]);
 
   useEffect(() => {
     const watchdog = window.setTimeout(() => {
       setLoading(prev => {
-        if (prev) {
-          setError(
-            current =>
-              current ||
-              'Долгая загрузка — проверьте интернет и откройте приложение заново из Telegram.'
-          );
-          return false;
-        }
-        return prev;
+        if (!prev) return prev;
+        setError(
+          current =>
+            current ||
+            'Долгая загрузка — проверьте интернет и откройте приложение заново из Telegram.'
+        );
+        return false;
       });
-    }, 18_000);
+    }, 55_000);
     return () => window.clearTimeout(watchdog);
   }, []);
+
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (!tg?.onEvent) return;
+
+    const onActivated = () => {
+      syncInitDataFromSdk();
+      if (error && !user && !loading) {
+        setLoading(true);
+        void loadData();
+        return;
+      }
+      if (!loading && user) {
+        void loadUserPicks();
+        void loadSquadOptions();
+      }
+    };
+
+    tg.onEvent('activated', onActivated);
+    return () => {
+      tg.offEvent?.('activated', onActivated);
+    };
+  }, [error, user, loading, loadData, loadUserPicks, loadSquadOptions]);
+
+  useEffect(() => {
+    if (loading || !stats) return;
+
+    const timer = window.setTimeout(() => {
+      const staleSquad =
+        (stats.hasSquad || stats.squadPoints > 0) && !squad.complete;
+      const staleTour =
+        (stats.hasTournamentPicks || stats.tournamentPoints > 0) &&
+        !isTournamentComplete(tournament);
+      if (staleSquad || staleTour) {
+        void loadUserPicks();
+      }
+    }, 2000);
+
+    return () => window.clearTimeout(timer);
+  }, [loading, stats, squad.complete, tournament, loadUserPicks]);
 
   useEffect(() => {
     if (!inviteBanner) return;
@@ -368,7 +498,10 @@ export default function App() {
     if (isTournamentPicksLocked(tournament, matches)) return;
     const data = await api.saveTournamentPicks(picks);
     setTournament(data);
-    await loadData();
+    if (statsRef.current) {
+      statsRef.current = { ...statsRef.current, hasTournamentPicks: true };
+    }
+    await loadUserPicks();
   };
 
   const handleSaveFavoriteTeam = async (teamId: string) => {
@@ -380,7 +513,10 @@ export default function App() {
   const handleSaveSquad = async (playerIds: string[]) => {
     const data = await api.saveSquad(playerIds);
     setSquad(data);
-    await loadData();
+    if (statsRef.current) {
+      statsRef.current = { ...statsRef.current, hasSquad: data.complete };
+    }
+    await refreshMatchesAndMe();
   };
 
   const tournamentComplete = isTournamentComplete(tournament);
@@ -422,6 +558,23 @@ export default function App() {
         <div className="loading" role="status" aria-live="polite">
           <div className="spinner" aria-hidden="true" />
           <span>Загрузка...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !user) {
+    return (
+      <div className="app">
+        <div className="loading" role="alert">
+          <p>{error}</p>
+          <button
+            type="button"
+            className="boot-retry-btn"
+            onClick={() => window.location.reload()}
+          >
+            Обновить
+          </button>
         </div>
       </div>
     );
@@ -476,6 +629,21 @@ export default function App() {
       </header>
 
       {error && <div className="error-banner" role="alert">{error}</div>}
+      {picksLoadError && (
+        <div className="error-banner picks-reload-banner" role="alert">
+          <span>{picksLoadError}</span>
+          <button
+            type="button"
+            className="picks-reload-btn"
+            onClick={() => {
+              void loadUserPicks();
+              void loadSquadOptions();
+            }}
+          >
+            Обновить
+          </button>
+        </div>
+      )}
       {inviteBanner && (
         <div className="error-banner" style={{ background: 'var(--accent)', color: '#fff' }} role="status">
           {inviteBanner}

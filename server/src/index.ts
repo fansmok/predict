@@ -44,7 +44,13 @@ app.use(cors({
     if (origin === webappOrigin) return callback(null, true);
     // Тот же домен по http или https (до/после certbot)
     try {
-      if (new URL(origin).hostname === new URL(webappOrigin).hostname) {
+      const originHost = new URL(origin).hostname.toLowerCase();
+      const webHost = new URL(webappOrigin).hostname.toLowerCase();
+      const hostsMatch =
+        originHost === webHost ||
+        originHost === `www.${webHost}` ||
+        webHost === `www.${originHost}`;
+      if (hostsMatch) {
         if (isProduction() && webappOrigin.startsWith('https://') && origin.startsWith('http://')) {
           return callback(new Error('Not allowed by CORS'));
         }

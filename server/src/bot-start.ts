@@ -1,4 +1,4 @@
-import { acceptInviteOnJoin, recordReferral } from './friends.js';
+import { recordReferral } from './friends.js';
 import {
   applyLeagueInvite,
   markStartParamProcessed,
@@ -10,10 +10,9 @@ export function processStartParamForUser(userId: number, startParam: string) {
   const param = startParam.trim().slice(0, 256);
   if (!param) return;
 
-  acceptInviteOnJoin(userId);
-
   if (param.startsWith('league_')) {
     if (!parseLeagueStartParam(param)) return;
+    if (wasStartParamProcessed(userId, param)) return;
     try {
       applyLeagueInvite(userId, param);
       markStartParamProcessed(userId, param);

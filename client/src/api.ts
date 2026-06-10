@@ -1,11 +1,15 @@
-import { clearCachedInitData, getTelegramInitData } from './telegram-init';
+import {
+  getTelegramInitData,
+  invalidateTelegramInitData,
+  syncInitDataFromSdk,
+} from './telegram-init';
 import { captureStartParam } from './utils';
 
 export { hasTelegramInitData, waitForTelegramInitData } from './telegram-init';
 
 const API_BASE = '/api';
-const REQUEST_TIMEOUT_MS = 15_000;
-const PING_TIMEOUT_MS = 8_000;
+const REQUEST_TIMEOUT_MS = 20_000;
+const PING_TIMEOUT_MS = 12_000;
 
 export function networkErrorMessage(reason?: unknown): string {
   if (reason instanceof DOMException && reason.name === 'AbortError') {
@@ -31,11 +35,11 @@ async function pingOnce(): Promise<boolean> {
 }
 
 /** Проверка сети без авторизации (несколько попыток — VPN иногда медленный). */
-export async function pingServer(attempts = 3): Promise<boolean> {
+export async function pingServer(attempts = 4): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
     if (await pingOnce()) return true;
     if (i < attempts - 1) {
-      await new Promise<void>(resolve => window.setTimeout(resolve, 700));
+      await new Promise<void>(resolve => window.setTimeout(resolve, 1000));
     }
   }
   return false;
@@ -49,11 +53,6 @@ function getHeaders(): HeadersInit {
   const initData = getTelegramInitData();
   if (initData) {
     headers['X-Telegram-Init-Data'] = initData;
-  }
-
-  const startParam = captureStartParam();
-  if (startParam) {
-    headers['X-Telegram-Start-Param'] = startParam;
   }
 
   return headers;
@@ -88,7 +87,11 @@ async function request<T>(path: string, options?: RequestInit, attempt = 0): Pro
     const err = await res.json().catch(() => ({ error: 'Request failed' }));
     const message = err.error || `HTTP ${res.status}`;
     if (res.status === 401 || message === 'Invalid Telegram auth' || message === 'Unauthorized') {
-      clearCachedInitData();
+      if (attempt < 1 && syncInitDataFromSdk() && getTelegramInitData()) {
+        await new Promise<void>(resolve => window.setTimeout(resolve, 300));
+        return request<T>(path, options, attempt + 1);
+      }
+      invalidateTelegramInitData();
       throw new Error(
         'Сессия устарела. Полностью закройте Mini App (смахните вниз) и откройте снова из @predictliga_bot.'
       );
@@ -364,6 +367,7 @@ declare global {
         openTelegramLink: (url: string) => void;
         themeParams: Record<string, string>;
         onEvent?: (event: string, handler: () => void) => void;
+        offEvent?: (event: string, handler: () => void) => void;
       };
     };
   }

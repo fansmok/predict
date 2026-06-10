@@ -49,7 +49,7 @@ export function SquadPage({ data, options, optionsError, onSave }: Props) {
 
   useEffect(() => {
     setSlots(buildSlotsFromData(data, options));
-  }, [data.players, options]);
+  }, [data.complete, data.players, data.locked, options]);
 
   const filledCount = slots.filter(Boolean).length;
 

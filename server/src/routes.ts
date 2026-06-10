@@ -184,8 +184,6 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
     const tgUser = validateTelegramInitData(initData, botToken);
     if (tgUser) {
       req.user = upsertUser(tgUser);
-      const startParam = resolveStartParam(req, initData);
-      if (startParam) processStartParam(req.user.id, startParam);
       return next();
     }
     return res.status(401).json({ error: 'Invalid Telegram auth' });
@@ -423,6 +421,18 @@ router.get('/auth/me', authMiddleware, (req, res) => {
         exactPoints: predictionBreakdown.exactPoints,
       },
       rank: computeRank(userId),
+      hasSquad:
+        getUserSquadPlayerIds(userId).length > 0 || getUserSquadConfirmedAt(userId) !== null,
+      hasTournamentPicks: (() => {
+        const row = getTournamentRow(userId);
+        if (!row) return false;
+        return !!(
+          row.winner_team_id ||
+          row.second_team_id ||
+          row.third_team_id ||
+          row.top_scorer_player_id
+        );
+      })(),
     },
   });
 });

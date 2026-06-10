@@ -1,6 +1,5 @@
 const LOCAL_SDK_URL = '/telegram-web-app.js?v=59';
-const REMOTE_SDK_URL = 'https://telegram.org/js/telegram-web-app.js?59';
-const SCRIPT_TIMEOUT_MS = 5_000;
+const SCRIPT_TIMEOUT_MS = 8_000;
 
 function loadScript(src: string): Promise<boolean> {
   if (window.Telegram?.WebApp) return Promise.resolve(true);
@@ -26,9 +25,5 @@ function loadScript(src: string): Promise<boolean> {
 export function loadTelegramSdk(): Promise<void> {
   if (window.Telegram?.WebApp) return Promise.resolve();
 
-  return (async () => {
-    await loadScript(LOCAL_SDK_URL);
-    if (window.Telegram?.WebApp) return;
-    await loadScript(REMOTE_SDK_URL);
-  })();
+  return loadScript(LOCAL_SDK_URL).then(() => undefined);
 }

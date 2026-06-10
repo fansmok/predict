@@ -19,16 +19,16 @@ const serverUrl = process.env.SERVER_URL ?? 'http://127.0.0.1:3001';
 const isProduction = process.env.NODE_ENV === 'production';
 
 if (!token || token === 'your_telegram_bot_token') {
-  console.log('⚠️  BOT_TOKEN не задан. Бот не запущен.');
-  console.log('   Создайте бота через @BotFather и добавьте токен в .env');
-  process.exit(0);
+  console.error('⚠️  BOT_TOKEN не задан. Бот не запущен.');
+  console.error('   Создайте бота через @BotFather и добавьте токен в .env');
+  process.exit(isProduction ? 1 : 0);
 }
 
 if (!apiSecret || apiSecret === 'your_bot_api_secret') {
-  console.log('⚠️  BOT_API_SECRET не задан. Бот не запущен.');
-  console.log('   Сгенерируйте: openssl rand -hex 32');
-  console.log('   Добавьте в .env → BOT_API_SECRET=...');
-  process.exit(0);
+  console.error('⚠️  BOT_API_SECRET не задан. Бот не запущен.');
+  console.error('   Сгенерируйте: openssl rand -hex 32');
+  console.error('   Добавьте в .env → BOT_API_SECRET=...');
+  process.exit(isProduction ? 1 : 0);
 }
 
 if (isProduction && apiSecret.length < 32) {

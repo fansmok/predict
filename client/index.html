@@ -17,17 +17,6 @@
         var BUILD_ID = '__BUILD_ID__';
 
         try {
-          var prev = sessionStorage.getItem('liga_build_id');
-          if (prev && prev !== BUILD_ID) {
-            var keys = [];
-            for (var i = 0; i < sessionStorage.length; i++) keys.push(sessionStorage.key(i));
-            keys.forEach(function (k) {
-              if (!k) return;
-              if (k.indexOf('liga_') === 0 || k.indexOf('__telegram__') === 0) {
-                sessionStorage.removeItem(k);
-              }
-            });
-          }
           sessionStorage.setItem('liga_build_id', BUILD_ID);
         } catch (e) {}
 
@@ -37,7 +26,7 @@
             var params = new URLSearchParams(hash);
             var raw = params.get('tgWebAppData');
             if (raw) {
-              var data = decodeURIComponent(raw);
+              var data = raw;
               var auth = new URLSearchParams(data).get('auth_date');
               if (auth && (Math.floor(Date.now() / 1000) - parseInt(auth, 10)) < 86400) {
                 sessionStorage.setItem('liga_tg_init_data', data);
@@ -54,7 +43,7 @@
             '<p>Не удалось загрузить приложение.<br>Возможно, на телефоне остался старый кэш.</p>' +
             '<button type="button" onclick="location.reload()" style="background:#22c55e;color:#0a0f1a;border:none;border-radius:12px;padding:12px 24px;font-size:16px;font-weight:600;">Обновить</button>' +
             '</div>';
-        }, 16000);
+        }, 45000);
       })();
     </script>
   </head>

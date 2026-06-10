@@ -264,8 +264,7 @@ export function getStartParam(): string {
 
     const tgWebAppData = hashParams.get('tgWebAppData');
     if (tgWebAppData) {
-      const decoded = decodeURIComponent(tgWebAppData);
-      const sp = new URLSearchParams(decoded).get('start_param');
+      const sp = new URLSearchParams(tgWebAppData).get('start_param');
       if (sp?.trim()) return sp.trim();
     }
   } catch {

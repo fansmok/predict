@@ -16,7 +16,7 @@ export function parseInitDataFromLocation(): string {
   try {
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const fromHash = hashParams.get('tgWebAppData');
-    if (fromHash) return decodeURIComponent(fromHash);
+    if (fromHash) return fromHash;
   } catch {
     /* ignore */
   }
@@ -24,7 +24,7 @@ export function parseInitDataFromLocation(): string {
   try {
     const searchParams = new URLSearchParams(window.location.search);
     const fromSearch = searchParams.get('tgWebAppData');
-    if (fromSearch) return decodeURIComponent(fromSearch);
+    if (fromSearch) return fromSearch;
   } catch {
     /* ignore */
   }
@@ -57,6 +57,7 @@ function cacheInitData(value: string): void {
 export function clearCachedInitData(): void {
   try {
     sessionStorage.removeItem(INIT_DATA_STORAGE_KEY);
+    sessionStorage.removeItem('__telegram__initParams');
   } catch {
     /* ignore */
   }
@@ -76,9 +77,8 @@ export function isMobileTelegramPlatform(): boolean {
   return /android|iphone|ipad|ipod/i.test(navigator.userAgent);
 }
 
-/** Единый источник initData: SDK → URL → Telegram cache → свой cache (только свежие). */
-export function getTelegramInitData(): string {
-  const candidates = [
+function readInitDataCandidates(): string[] {
+  return [
     window.Telegram?.WebApp?.initData?.trim() ?? '',
     parseInitDataFromLocation().trim(),
     parseInitDataFromTelegramStorage(),
@@ -90,16 +90,32 @@ export function getTelegramInitData(): string {
       }
     })(),
   ];
+}
 
-  for (const data of candidates) {
+/** Единый источник initData: SDK → URL → Telegram cache → свой cache (только свежие). */
+export function getTelegramInitData(): string {
+  for (const data of readInitDataCandidates()) {
     if (data && isInitDataFresh(data)) {
       cacheInitData(data);
       return data;
     }
   }
-
-  clearCachedInitData();
   return '';
+}
+
+/** Сброс кэша только при явной ошибке авторизации (не при каждом опросе). */
+export function invalidateTelegramInitData(): void {
+  clearCachedInitData();
+}
+
+/** Перечитать initData из SDK после загрузки (актуально при возврате из фона). */
+export function syncInitDataFromSdk(): boolean {
+  const fresh = window.Telegram?.WebApp?.initData?.trim() ?? '';
+  if (fresh && isInitDataFresh(fresh)) {
+    cacheInitData(fresh);
+    return true;
+  }
+  return false;
 }
 
 export function hasTelegramInitData(): boolean {
@@ -107,7 +123,7 @@ export function hasTelegramInitData(): boolean {
 }
 
 export async function waitForTelegramInitData(maxMs?: number): Promise<void> {
-  const ms = maxMs ?? (isMobileTelegramPlatform() ? 12_000 : 5_000);
+  const ms = maxMs ?? (isMobileTelegramPlatform() ? 15_000 : 6_000);
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (hasTelegramInitData()) return;

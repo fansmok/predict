@@ -132,6 +132,10 @@ export interface UserStats {
     exactPoints: number;
   };
   rank: number;
+  /** Сервер знает, что состав сохранён (даже если очков ещё 0). */
+  hasSquad?: boolean;
+  /** Сервер знает, что прогнозы на турнир сохранены. */
+  hasTournamentPicks?: boolean;
 }
 
 export interface User {
