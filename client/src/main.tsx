@@ -29,12 +29,15 @@ function showBootFailure(): void {
     '</div>';
 }
 
-function startApp(): void {
+async function startApp(): Promise<void> {
   primeInitDataFromUrl();
 
-  void loadTelegramSdk()
-    .then(bindTelegramChrome)
-    .catch(err => console.warn('[telegram-sdk]', err));
+  try {
+    await loadTelegramSdk();
+    bindTelegramChrome();
+  } catch (err) {
+    console.warn('[telegram-sdk]', err);
+  }
 
   const rootEl = document.getElementById('root');
   if (!rootEl) {
@@ -51,9 +54,7 @@ function startApp(): void {
   );
 }
 
-try {
-  startApp();
-} catch (err) {
+void startApp().catch(err => {
   console.error('[boot]', err);
   showBootFailure();
-}
+});

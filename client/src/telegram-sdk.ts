@@ -1,5 +1,5 @@
 const LOCAL_SDK_URL = '/telegram-web-app.js?v=59';
-const SCRIPT_TIMEOUT_MS = 8_000;
+const SCRIPT_TIMEOUT_MS = 20_000;
 
 function loadScript(src: string): Promise<boolean> {
   if (window.Telegram?.WebApp) return Promise.resolve(true);

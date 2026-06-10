@@ -123,10 +123,11 @@ export function hasTelegramInitData(): boolean {
 }
 
 export async function waitForTelegramInitData(maxMs?: number): Promise<void> {
-  const ms = maxMs ?? (isMobileTelegramPlatform() ? 15_000 : 6_000);
+  const ms = maxMs ?? (isMobileTelegramPlatform() ? 30_000 : 8_000);
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
+    syncInitDataFromSdk();
     if (hasTelegramInitData()) return;
-    await new Promise<void>(resolve => window.setTimeout(resolve, 50));
+    await new Promise<void>(resolve => window.setTimeout(resolve, 100));
   }
 }
