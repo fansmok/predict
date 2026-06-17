@@ -204,9 +204,9 @@ export const TEAM_ROSTERS: Record<string, RosterLine> = {
   },
   nor: {
     gk: ['Ørjan Nyland', 'Sander Tangvik', 'Egil Selvik'],
-    def: ['Kristoffer Ajer', 'Leo Østigård', 'David Møller Wolfe', 'Fredrik André Bjørkan', 'Marcus Holmgren Pedersen', 'Torbjørn Heggem', 'Sondre Langås', 'Henrik Falchener'],
+    def: ['Kristoffer Ajer', 'Leo Østigård', 'David Møller Wolfe', 'Fredrik André Bjørkan', 'Marcus Holmgren Pedersen', 'Torbjørn Heggem', 'Sondre Langås', 'Henrik Falchener', 'Julian Ryerson'],
     mid: ['Morten Thorsby', 'Patrick Berg', 'Sander Berge', 'Martin Ødegaard', 'Fredrik Aursnes', 'Kristian Thorstvedt', 'Thelo Aasgaard', 'Andreas Schjelderup', 'Oscar Bobb', 'Jens Petter Hauge'],
-    fwd: ['Alexander Sørloth', 'Erling Haaland', 'Jørgen Strand Larsen', 'Antonio Nusa', 'Julian Ryerson'],
+    fwd: ['Alexander Sørloth', 'Erling Haaland', 'Jørgen Strand Larsen', 'Antonio Nusa'],
   },
   nzl: {
     gk: ['Max Crocombe', 'Alex Paulsen', 'Michael Woud'],
