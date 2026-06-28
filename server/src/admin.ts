@@ -5,6 +5,8 @@ import { isParticipantTeamId, MATCHES, TEAMS } from './data/matches.js';
 import { getPlayer, TOURNAMENT_POINTS } from './data/players.js';
 import { getSquadPlayer } from './data/squad-players.js';
 import { invalidateLeaderboardCache } from './ranking.js';
+import { invalidatePlayerMatchStatsCache } from './squad.js';
+import { advanceBracketAfterResult, reconcileBracketFromFinished } from './bracket-advance.js';
 
 export const MAX_SCORE = 15;
 
@@ -36,7 +38,10 @@ export function getGroupMatch(matchId: number) {
 }
 
 /** Пересчёт очков прогнозов по итоговому счёту и актуальным ставкам ×2. */
-export function recalculateMatchPredictionPoints(matchId: number): number {
+export function recalculateMatchPredictionPoints(
+  matchId: number,
+  options?: { skipCacheInvalidate?: boolean }
+): number {
   const match = db.prepare(`
     SELECT home_score, away_score, status FROM matches WHERE id = ?
   `).get(matchId) as { home_score: number | null; away_score: number | null; status: string } | undefined;
@@ -72,7 +77,9 @@ export function recalculateMatchPredictionPoints(matchId: number): number {
     updatePoints.run(pts, p.id);
   }
 
-  invalidateLeaderboardCache();
+  if (!options?.skipCacheInvalidate) {
+    invalidateLeaderboardCache();
+  }
   return predictions.length;
 }
 
@@ -85,7 +92,10 @@ export function recalculateAllFinishedMatchPoints(): number {
 
   let total = 0;
   for (const row of rows) {
-    total += recalculateMatchPredictionPoints(row.id);
+    total += recalculateMatchPredictionPoints(row.id, { skipCacheInvalidate: true });
+  }
+  if (rows.length > 0) {
+    invalidateLeaderboardCache();
   }
   return total;
 }
@@ -99,7 +109,9 @@ export function applyMatchResult(matchId: number, homeScore: number, awayScore: 
   });
 
   apply();
-  return recalculateMatchPredictionPoints(matchId);
+  const predictions = recalculateMatchPredictionPoints(matchId);
+  advanceBracketAfterResult(matchId, homeScore, awayScore);
+  return predictions;
 }
 
 export function getAdminTournamentState() {
@@ -398,6 +410,7 @@ export function upsertSquadStats(matchId: number, stats: SquadStatInput[]): numb
     );
   }
 
+  invalidatePlayerMatchStatsCache();
   invalidateLeaderboardCache();
   return stats.length;
 }
@@ -564,6 +577,9 @@ export function resetMatch(matchId: number): { kickoff: string } | null {
   db.prepare(`UPDATE predictions SET points = NULL WHERE match_id = ?`).run(matchId);
   db.prepare(`DELETE FROM player_match_stats WHERE match_id = ?`).run(matchId);
   db.prepare(`UPDATE matches SET fantasy_events = NULL WHERE id = ?`).run(matchId);
+
+  reconcileBracketFromFinished();
+  invalidateLeaderboardCache();
 
   return { kickoff: seed.kickoff };
 }

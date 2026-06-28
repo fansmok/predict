@@ -7,6 +7,7 @@ import { backfillPlatinumStatuses } from './platinum.js';
 import { resetSquadScoringCache } from './squad.js';
 import { runSchemaMigrations } from './db-migrate.js';
 import { sanitizePhotoUrl } from './security.js';
+import { reconcileBracketFromFinished } from './bracket-advance.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.join(__dirname, '..', 'data.db');
@@ -345,6 +346,7 @@ export function syncMatchesFromCode(): number {
       changed += result.changes;
     }
   }
+  reconcileBracketFromFinished();
   if (changed > 0) resetSquadScoringCache();
   return changed;
 }
@@ -400,6 +402,21 @@ export function upsertUser(user: {
   photo_url?: string;
 }): DbUser {
   const photoUrl = sanitizePhotoUrl(user.photo_url) ?? null;
+  const lastName = user.last_name ?? null;
+  const username = user.username ?? null;
+
+  const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as DbUser | undefined;
+  if (existing) {
+    const photoUnchanged = photoUrl === null || existing.photo_url === photoUrl;
+    if (
+      existing.first_name === user.first_name &&
+      existing.last_name === lastName &&
+      existing.username === username &&
+      photoUnchanged
+    ) {
+      return existing;
+    }
+  }
 
   db.prepare(`
     INSERT INTO users (id, first_name, last_name, username, photo_url)
@@ -409,7 +426,7 @@ export function upsertUser(user: {
       last_name = excluded.last_name,
       username = excluded.username,
       photo_url = COALESCE(excluded.photo_url, users.photo_url)
-  `).run(user.id, user.first_name, user.last_name ?? null, user.username ?? null, photoUrl);
+  `).run(user.id, user.first_name, lastName, username, photoUrl);
 
   return db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as DbUser;
 }

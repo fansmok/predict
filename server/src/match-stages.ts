@@ -5,7 +5,7 @@ export type TournamentStage = (typeof TOURNAMENT_STAGES)[number];
 /**
  * Плей-офф в UI прогнозов. Включить, когда известны пары (поставить true).
  */
-export const PLAYOFF_PREDICTIONS_ENABLED = false;
+export const PLAYOFF_PREDICTIONS_ENABLED = true;
 
 /** Стадии, на которые пользователь может ставить прогноз в приложении. */
 export const PREDICTION_STAGES = (
