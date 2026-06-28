@@ -89,7 +89,15 @@ export function getUserSquadPlayerIds(userId: number): string[] {
   return rows.map(r => r.player_id);
 }
 
+let cachedAllPlayerMatchStats: PlayerMatchStat[] | null = null;
+
+export function invalidatePlayerMatchStatsCache(): void {
+  cachedAllPlayerMatchStats = null;
+}
+
 export function getAllPlayerMatchStats(): PlayerMatchStat[] {
+  if (cachedAllPlayerMatchStats) return cachedAllPlayerMatchStats;
+
   const rows = db.prepare(`
     SELECT pms.match_id as matchId, pms.player_id as playerId, pms.goals, pms.assists,
            pms.team_won as teamWon, pms.clean_sheet as cleanSheet,
@@ -104,13 +112,14 @@ export function getAllPlayerMatchStats(): PlayerMatchStat[] {
     played: number;
   }>;
 
-  return rows.map(r => ({
+  cachedAllPlayerMatchStats = rows.map(r => ({
     ...r,
     teamWon: r.teamWon === 1,
     cleanSheet: r.cleanSheet === 1,
     sentOff: r.sentOff === 1,
     played: r.played === 1,
   }));
+  return cachedAllPlayerMatchStats;
 }
 
 /** Статистика только за матчи, начавшиеся после подтверждения состава. */

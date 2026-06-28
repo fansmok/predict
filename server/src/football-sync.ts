@@ -7,6 +7,7 @@ import {
 } from './admin.js';
 import { SQUAD_PLAYERS } from './data/squad-players.js';
 import { resolveApiTeamId } from './data/team-api-codes.js';
+import { invalidatePlayerMatchStatsCache } from './squad.js';
 import {
   fetchFixtureById,
   fetchFixtureEvents,
@@ -516,6 +517,7 @@ export async function linkMatchToApiFixture(matchId: number, fixtureId: number):
 
   db.prepare(`UPDATE predictions SET points = NULL WHERE match_id = ?`).run(matchId);
   db.prepare(`DELETE FROM player_match_stats WHERE match_id = ?`).run(matchId);
+  invalidatePlayerMatchStatsCache();
   db.prepare(`UPDATE matches SET fantasy_events = NULL WHERE id = ?`).run(matchId);
 
   return {
