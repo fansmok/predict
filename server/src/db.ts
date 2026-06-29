@@ -199,6 +199,9 @@ function migrateDatabase() {
   if (!matchCols.some(c => c.name === 'fantasy_events')) {
     db.exec(`ALTER TABLE matches ADD COLUMN fantasy_events TEXT`);
   }
+  if (!matchCols.some(c => c.name === 'advance_team_id')) {
+    db.exec(`ALTER TABLE matches ADD COLUMN advance_team_id TEXT REFERENCES teams(id)`);
+  }
 
   const leagueCols = db.prepare(`PRAGMA table_info(leagues)`).all() as Array<{ name: string }>;
   if (!leagueCols.some(c => c.name === 'emoji')) {

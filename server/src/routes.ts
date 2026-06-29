@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db, upsertUser, DbUser } from './db.js';
 import { validateTelegramInitData, createDevUser } from './telegram-auth.js';
-import { getGameDay, isMatchLocked, canPredictMatch, shouldAutoDoublePick } from './game-day.js';
+import { getGameDay, getGameDayKickoffBounds, isMatchLocked, canPredictMatch, shouldAutoDoublePick } from './game-day.js';
 import { getMatchPredictionStats, getSingleMatchPredictionStats, type MatchConsensus } from './match-stats.js';
 import { buildMatchProfile } from './match-profile.js';
 import { PLAYERS, getPlayer, TOURNAMENT_DEADLINE, TOURNAMENT_POINTS } from './data/players.js';
@@ -80,6 +80,7 @@ import {
   getGroupMatch,
   applyMatchResult,
   applyMatchResultFull,
+  validateKnockoutAdvance,
   getAdminTournamentState,
   settleTournamentResults,
   validateTournamentResults,
@@ -219,6 +220,7 @@ function getUserDoublePicks(userId: number): Record<string, number> {
 }
 
 function getGameDayPredictionStates(userId: number, gameDay: string) {
+  const { start, end } = getGameDayKickoffBounds(gameDay);
   const rows = db.prepare(`
     SELECT m.id, m.stage, m.kickoff, m.status,
       EXISTS(
@@ -227,7 +229,8 @@ function getGameDayPredictionStates(userId: number, gameDay: string) {
       ) as has_prediction
     FROM matches m
     WHERE m.stage IN (${stagesSqlIn()})
-  `).all(userId) as Array<{
+      AND m.kickoff >= ? AND m.kickoff <= ?
+  `).all(userId, start, end) as Array<{
     id: number;
     stage: string;
     kickoff: string;
@@ -235,15 +238,13 @@ function getGameDayPredictionStates(userId: number, gameDay: string) {
     has_prediction: number;
   }>;
 
-  return rows
-    .filter(r => getGameDay(r.kickoff) === gameDay)
-    .map(r => ({
-      id: r.id,
-      stage: r.stage,
-      kickoff: r.kickoff,
-      status: r.status,
-      hasPrediction: r.has_prediction === 1,
-    }));
+  return rows.map(r => ({
+    id: r.id,
+    stage: r.stage,
+    kickoff: r.kickoff,
+    status: r.status,
+    hasPrediction: r.has_prediction === 1,
+  }));
 }
 
 function enrichMatch(row: Record<string, unknown>, doublePicks: Record<string, number>) {
@@ -272,6 +273,28 @@ function enrichMatch(row: Record<string, unknown>, doublePicks: Record<string, n
     isDouble: isPredictableStage(stage) && doublePicks[gameDay] === row.id,
     doublePickMatchId: isPredictableStage(stage) ? (doublePicks[gameDay] ?? null) : null,
     externalFixtureId: row.external_fixture_id ?? null,
+  };
+}
+
+function buildEnrichedUserMatch(
+  userId: number,
+  row: Record<string, unknown>,
+  doublePicks: Record<string, number>
+) {
+  const matchId = row.id as number;
+  const match = enrichMatch(row, doublePicks);
+  const consensus = getSingleMatchPredictionStats(matchId);
+  const prediction = db.prepare(`
+    SELECT home_score, away_score, points FROM predictions
+    WHERE user_id = ? AND match_id = ?
+  `).get(userId, matchId) as { home_score: number; away_score: number; points: number | null } | undefined;
+
+  return {
+    ...match,
+    consensus,
+    prediction: prediction
+      ? { homeScore: prediction.home_score, awayScore: prediction.away_score, points: prediction.points }
+      : null,
   };
 }
 
@@ -509,22 +532,8 @@ router.get('/matches/:id', authMiddleware, (req, res) => {
   if (!row) return res.status(404).json({ error: 'Match not found' });
 
   const doublePicks = getUserDoublePicks(req.user!.id);
-  const match = enrichMatch(row as Record<string, unknown>, doublePicks);
-  const matchId = Number(req.params.id);
-  const consensus = getSingleMatchPredictionStats(matchId);
-  const prediction = db.prepare(`
-    SELECT home_score, away_score, points FROM predictions
-    WHERE user_id = ? AND match_id = ?
-  `).get(req.user!.id, req.params.id) as { home_score: number; away_score: number; points: number | null } | undefined;
-
   res.json({
-    match: {
-      ...match,
-      consensus,
-      prediction: prediction
-        ? { homeScore: prediction.home_score, awayScore: prediction.away_score, points: prediction.points }
-        : null,
-    },
+    match: buildEnrichedUserMatch(req.user!.id, row as Record<string, unknown>, doublePicks),
   });
 });
 
@@ -594,7 +603,15 @@ router.post('/predictions', authMiddleware, userActionRateLimit, (req, res) => {
     `).run(userId, gameDay, matchId);
   }
 
-  res.json({ success: true });
+  const doublePicksAfter = getUserDoublePicks(userId);
+  const updatedRow = db.prepare(`SELECT * FROM matches WHERE id = ?`).get(matchId) as Record<string, unknown>;
+
+  res.json({
+    success: true,
+    match: buildEnrichedUserMatch(userId, updatedRow, doublePicksAfter),
+    doublePicks: doublePicksAfter,
+    isNewPrediction: !hadPrediction,
+  });
 });
 
 router.post('/double-picks', authMiddleware, userActionRateLimit, (req, res) => {
@@ -1153,6 +1170,13 @@ router.post('/admin/match-result', authMiddleware, userActionRateLimit, adminMid
     return res.status(404).json({ error: 'Матч не найден' });
   }
 
+  const advanceTeamId =
+    typeof req.body.advanceTeamId === 'string' && req.body.advanceTeamId.trim()
+      ? req.body.advanceTeamId.trim()
+      : null;
+  const advanceErr = validateKnockoutAdvance(matchId, homeScore, awayScore, advanceTeamId);
+  if (advanceErr) return res.status(400).json({ error: advanceErr });
+
   const hasFantasy =
     Array.isArray(req.body.homeGoals) ||
     Array.isArray(req.body.awayGoals) ||
@@ -1171,7 +1195,8 @@ router.post('/admin/match-result', authMiddleware, userActionRateLimit, adminMid
       homeGoals,
       awayGoals,
       playedPlayerIds.filter((id: unknown) => typeof id === 'string'),
-      sentOffPlayerIds.filter((id: unknown) => typeof id === 'string')
+      sentOffPlayerIds.filter((id: unknown) => typeof id === 'string'),
+      advanceTeamId
     );
     if (typeof result === 'string') return res.status(400).json({ error: result });
 
@@ -1183,9 +1208,13 @@ router.post('/admin/match-result', authMiddleware, userActionRateLimit, adminMid
     });
   }
 
-  const updated = applyMatchResult(matchId, homeScore, awayScore);
-  logAdminAction(userId, 'match-result', { matchId, homeScore, awayScore });
-  res.json({ success: true, updated });
+  try {
+    const updated = applyMatchResult(matchId, homeScore, awayScore, advanceTeamId);
+    logAdminAction(userId, 'match-result', { matchId, homeScore, awayScore, advanceTeamId });
+    res.json({ success: true, updated });
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : 'Ошибка сохранения результата' });
+  }
 });
 
 router.post('/admin/match-start', authMiddleware, userActionRateLimit, adminMiddleware, (req, res) => {

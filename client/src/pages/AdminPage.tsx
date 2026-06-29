@@ -23,11 +23,14 @@ interface GoalRow {
 interface MatchDraft {
   home: string;
   away: string;
+  advanceTeamId: string;
   homeGoals: GoalRow[];
   awayGoals: GoalRow[];
   playedIds: Set<string>;
   sentOffIds: Set<string>;
 }
+
+const KNOCKOUT_STAGES = new Set(['r32', 'r16', 'qf', 'sf']);
 
 const POS_LABEL: Record<string, string> = {
   GK: 'ВР',
@@ -228,6 +231,7 @@ function MatchEditor({
       onDraftChange({
         home: String(data.homeScore),
         away: String(data.awayScore),
+        advanceTeamId: data.advanceTeamId ?? '',
         homeGoals:
           data.homeGoals.length > 0
             ? data.homeGoals.map(g => ({ scorerId: g.scorerId, assistId: g.assistId ?? '' }))
@@ -245,6 +249,7 @@ function MatchEditor({
       onDraftChange({
         home: match.homeScore != null ? String(match.homeScore) : '',
         away: match.awayScore != null ? String(match.awayScore) : '',
+        advanceTeamId: '',
         homeGoals: emptyGoals(match.homeScore ?? 0),
         awayGoals: emptyGoals(match.awayScore ?? 0),
         playedIds: new Set(),
@@ -257,6 +262,9 @@ function MatchEditor({
   const homeScore = parseScoreInput(draft.home);
   const awayScore = parseScoreInput(draft.away);
   const scoresValid = homeScore != null && awayScore != null;
+  const isKnockout = KNOCKOUT_STAGES.has(match.stage);
+  const isDraw = scoresValid && homeScore === awayScore;
+  const needsAdvancePick = isKnockout && isDraw;
 
   const setScore = (side: 'home' | 'away', val: string) => {
     const next = { ...draft, [side]: val } as MatchDraft;
@@ -264,6 +272,7 @@ function MatchEditor({
     const a = parseScoreInput(side === 'away' ? val : draft.away) ?? 0;
     next.homeGoals = emptyGoals(h).map((row, i) => draft.homeGoals[i] ?? row);
     next.awayGoals = emptyGoals(a).map((row, i) => draft.awayGoals[i] ?? row);
+    if (h !== a) next.advanceTeamId = '';
     onDraftChange(next);
   };
 
@@ -360,6 +369,40 @@ function MatchEditor({
               </div>
             </div>
           </div>
+
+          {needsAdvancePick && (
+            <div className="admin-step">
+              <div className="admin-step-title">
+                <span className="admin-step-num">!</span>
+                Кто прошёл дальше
+              </div>
+              <p className="admin-step-hint">
+                Счёт выше — только основное время. Укажите победителя после доп. времени или пенальти.
+              </p>
+              <div className="admin-advance-pick">
+                <label className="admin-advance-option">
+                  <input
+                    type="radio"
+                    name={`advance-${match.id}`}
+                    checked={draft.advanceTeamId === match.homeTeam.id}
+                    onChange={() => onDraftChange({ ...draft, advanceTeamId: match.homeTeam.id })}
+                  />
+                  <img src={match.homeTeam.flag} alt="" aria-hidden="true" className="admin-flag" />
+                  {match.homeTeam.name}
+                </label>
+                <label className="admin-advance-option">
+                  <input
+                    type="radio"
+                    name={`advance-${match.id}`}
+                    checked={draft.advanceTeamId === match.awayTeam.id}
+                    onChange={() => onDraftChange({ ...draft, advanceTeamId: match.awayTeam.id })}
+                  />
+                  <img src={match.awayTeam.flag} alt="" aria-hidden="true" className="admin-flag" />
+                  {match.awayTeam.name}
+                </label>
+              </div>
+            </div>
+          )}
 
           {scoresValid && (
             <div className="admin-step">
@@ -484,7 +527,7 @@ function MatchEditor({
 }
 
 function defaultDraft(): MatchDraft {
-  return { home: '', away: '', homeGoals: [], awayGoals: [], playedIds: new Set(), sentOffIds: new Set() };
+  return { home: '', away: '', advanceTeamId: '', homeGoals: [], awayGoals: [], playedIds: new Set(), sentOffIds: new Set() };
 }
 
 export function AdminPage({ matches, squadPlayers, tournamentTeams, tournamentPlayers, onRefresh }: Props) {
@@ -530,6 +573,15 @@ export function AdminPage({ matches, squadPlayers, tournamentTeams, tournamentPl
       return;
     }
 
+    const isKnockout = KNOCKOUT_STAGES.has(match.stage);
+    if (isKnockout && home === away && !draft.advanceTeamId) {
+      setMessage({
+        text: 'Укажите, кто прошёл дальше после доп. времени / пенальти',
+        ok: false,
+      });
+      return;
+    }
+
     for (let i = 0; i < draft.homeGoals.length; i++) {
       if (!draft.homeGoals[i].scorerId) {
         setMessage({ text: `${match.homeTeam.name}: укажите автора гола #${i + 1}`, ok: false });
@@ -557,6 +609,7 @@ export function AdminPage({ matches, squadPlayers, tournamentTeams, tournamentPl
         })),
         playedPlayerIds: [...draft.playedIds],
         sentOffPlayerIds: [...draft.sentOffIds],
+        advanceTeamId: isKnockout && home === away ? draft.advanceTeamId : null,
       });
       setMessage({
         text: `Матч #${match.id}: ${home}:${away} — прогнозы: ${res.updated ?? 0}, fantasy-строк: ${res.squadStats ?? 0}`,

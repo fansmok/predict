@@ -1,6 +1,6 @@
 import { db } from './db.js';
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 function getSchemaVersion(): number {
   db.exec(`
@@ -251,6 +251,15 @@ function migrateToV6(): void {
   if (!cols.some(c => c.name === 'emoji_bg')) {
     db.exec(`ALTER TABLE leagues ADD COLUMN emoji_bg TEXT NOT NULL DEFAULT '#5b4fd9'`);
   }
+  setSchemaVersion(6);
+  console.log('[db] Schema migrated to v6');
+}
+
+function migrateToV7(): void {
+  const cols = db.prepare(`PRAGMA table_info(matches)`).all() as Array<{ name: string }>;
+  if (!cols.some(c => c.name === 'advance_team_id')) {
+    db.exec(`ALTER TABLE matches ADD COLUMN advance_team_id TEXT REFERENCES teams(id)`);
+  }
   setSchemaVersion(SCHEMA_VERSION);
   console.log(`[db] Schema migrated to v${SCHEMA_VERSION}`);
 }
@@ -274,7 +283,8 @@ export function runSchemaMigrations(): void {
   if (getSchemaVersion() < 3) migrateToV3();
   if (getSchemaVersion() < 4) migrateToV4();
   if (getSchemaVersion() < 5) migrateToV5();
-  if (getSchemaVersion() < SCHEMA_VERSION) migrateToV6();
+  if (getSchemaVersion() < 6) migrateToV6();
+  if (getSchemaVersion() < SCHEMA_VERSION) migrateToV7();
   repairLeagueMembersForeignKey();
 }
 

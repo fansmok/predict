@@ -58,8 +58,10 @@ function buildPlayers(): SquadPlayer[] {
 
 export const SQUAD_PLAYERS: SquadPlayer[] = buildPlayers();
 
+const SQUAD_PLAYER_BY_ID = new Map(SQUAD_PLAYERS.map(p => [p.id, p]));
+
 export function getSquadPlayer(id: string): SquadPlayer | undefined {
-  return SQUAD_PLAYERS.find(p => p.id === id);
+  return SQUAD_PLAYER_BY_ID.get(id);
 }
 
 export const SQUAD_SCORING = {

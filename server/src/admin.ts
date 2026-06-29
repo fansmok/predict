@@ -6,7 +6,7 @@ import { getPlayer, TOURNAMENT_POINTS } from './data/players.js';
 import { getSquadPlayer } from './data/squad-players.js';
 import { invalidateLeaderboardCache } from './ranking.js';
 import { invalidatePlayerMatchStatsCache } from './squad.js';
-import { advanceBracketAfterResult, reconcileBracketFromFinished } from './bracket-advance.js';
+import { advanceBracketAfterResult, reconcileBracketFromFinished, isKnockoutAdvanceStage } from './bracket-advance.js';
 
 export const MAX_SCORE = 15;
 
@@ -100,17 +100,57 @@ export function recalculateAllFinishedMatchPoints(): number {
   return total;
 }
 
-export function applyMatchResult(matchId: number, homeScore: number, awayScore: number): number {
+export function validateKnockoutAdvance(
+  matchId: number,
+  homeScore: number,
+  awayScore: number,
+  advanceTeamId?: string | null
+): string | null {
+  const row = db.prepare(`SELECT stage, home_team_id, away_team_id FROM matches WHERE id = ?`).get(matchId) as
+    | { stage: string; home_team_id: string; away_team_id: string }
+    | undefined;
+  if (!row) return 'Матч не найден';
+  if (!isKnockoutAdvanceStage(row.stage)) {
+    return advanceTeamId ? 'Проход дальше задаётся только для плей-офф' : null;
+  }
+  if (homeScore !== awayScore) return null;
+  if (!advanceTeamId) {
+    return 'Укажите, кто прошёл дальше после доп. времени / пенальти';
+  }
+  if (advanceTeamId !== row.home_team_id && advanceTeamId !== row.away_team_id) {
+    return 'Команда прохода должна участвовать в этом матче';
+  }
+  return null;
+}
+
+export function applyMatchResult(
+  matchId: number,
+  homeScore: number,
+  awayScore: number,
+  advanceTeamId?: string | null
+): number {
+  const advanceErr = validateKnockoutAdvance(matchId, homeScore, awayScore, advanceTeamId);
+  if (advanceErr) throw new Error(advanceErr);
+
+  const storedAdvance = homeScore === awayScore ? (advanceTeamId ?? null) : null;
+
   const apply = db.transaction(() => {
     db.prepare(`
-      UPDATE matches SET home_score = ?, away_score = ?, status = 'finished'
+      UPDATE matches SET home_score = ?, away_score = ?, status = 'finished', advance_team_id = ?
       WHERE id = ?
-    `).run(homeScore, awayScore, matchId);
+    `).run(homeScore, awayScore, storedAdvance, matchId);
   });
 
   apply();
   const predictions = recalculateMatchPredictionPoints(matchId);
-  advanceBracketAfterResult(matchId, homeScore, awayScore);
+  const stageRow = db.prepare(`SELECT stage FROM matches WHERE id = ?`).get(matchId) as
+    | { stage: string }
+    | undefined;
+  if (stageRow && isKnockoutAdvanceStage(stageRow.stage)) {
+    reconcileBracketFromFinished();
+  } else {
+    advanceBracketAfterResult(matchId, homeScore, awayScore);
+  }
   return predictions;
 }
 
@@ -422,10 +462,14 @@ export function applyMatchResultFull(
   homeGoals: GoalEventInput[],
   awayGoals: GoalEventInput[],
   playedPlayerIds: string[],
-  sentOffPlayerIds: string[] = []
+  sentOffPlayerIds: string[] = [],
+  advanceTeamId?: string | null
 ): { predictions: number; squadStats: number } | string {
   const teams = getMatchTeams(matchId);
   if (!teams) return 'Матч не найден';
+
+  const advanceErr = validateKnockoutAdvance(matchId, homeScore, awayScore, advanceTeamId);
+  if (advanceErr) return advanceErr;
 
   const squadStats = buildSquadStatsFromEvents(
     teams.homeTeamId,
@@ -439,7 +483,7 @@ export function applyMatchResultFull(
   );
   if (typeof squadStats === 'string') return squadStats;
 
-  const predictions = applyMatchResult(matchId, homeScore, awayScore);
+  const predictions = applyMatchResult(matchId, homeScore, awayScore, advanceTeamId);
   const squadCount = upsertSquadStats(matchId, squadStats);
 
   db.prepare(`UPDATE matches SET fantasy_events = ? WHERE id = ?`).run(
@@ -454,6 +498,7 @@ export function applyMatchResultFull(
 export function getMatchFantasyDraft(matchId: number): {
   homeScore: number;
   awayScore: number;
+  advanceTeamId: string | null;
   homeGoals: GoalEventInput[];
   awayGoals: GoalEventInput[];
   playedPlayerIds: string[];
@@ -461,7 +506,7 @@ export function getMatchFantasyDraft(matchId: number): {
   statsCount: number;
 } | null {
   const match = db.prepare(`
-    SELECT id, home_score, away_score, home_team_id, away_team_id, fantasy_events
+    SELECT id, home_score, away_score, home_team_id, away_team_id, fantasy_events, advance_team_id
     FROM matches WHERE id = ? AND stage IN (${rankedStagesSqlIn()})
   `).get(matchId) as {
     id: number;
@@ -470,6 +515,7 @@ export function getMatchFantasyDraft(matchId: number): {
     home_team_id: string;
     away_team_id: string;
     fantasy_events: string | null;
+    advance_team_id: string | null;
   } | undefined;
 
   if (!match || match.home_score == null || match.away_score == null) return null;
@@ -488,6 +534,7 @@ export function getMatchFantasyDraft(matchId: number): {
       return {
         homeScore: match.home_score,
         awayScore: match.away_score,
+        advanceTeamId: match.advance_team_id,
         homeGoals: stored.homeGoals ?? [],
         awayGoals: stored.awayGoals ?? [],
         playedPlayerIds: stored.playedPlayerIds ?? [],
@@ -547,6 +594,7 @@ export function getMatchFantasyDraft(matchId: number): {
   return {
     homeScore: match.home_score,
     awayScore: match.away_score,
+    advanceTeamId: match.advance_team_id,
     homeGoals,
     awayGoals,
     playedPlayerIds: statRows.filter(r => r.played).map(r => r.player_id),
@@ -564,6 +612,7 @@ export function resetMatch(matchId: number): { kickoff: string } | null {
       home_team_id = ?, away_team_id = ?,
       kickoff = ?, status = 'scheduled',
       home_score = NULL, away_score = NULL,
+      advance_team_id = NULL,
       external_fixture_id = ?
     WHERE id = ?
   `).run(

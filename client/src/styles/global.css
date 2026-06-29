@@ -8550,6 +8550,34 @@ body.picker-open .bottom-nav {
   gap: 12px;
 }
 
+.admin-advance-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-advance-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-advance-option:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elevated));
+}
+
+.admin-advance-option input {
+  margin: 0;
+}
+
 .admin-score-team {
   display: flex;
   flex-direction: column;

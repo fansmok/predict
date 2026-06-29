@@ -61,13 +61,24 @@ function main() {
   const r16Can = getMatchTeams(89);
   assert(r16Can?.home_team_id === 'can', 'победитель A03 (can) → home матча B02');
 
-  // Ничья не продвигает
+  // Ничья без advance_team_id не продвигает
   resetMatch(73);
   resetMatch(89);
   const beforeDraw = getMatchTeams(89)?.home_team_id;
   advanceBracketAfterResult(73, 1, 1);
   const afterDraw = getMatchTeams(89)?.home_team_id;
-  assert(beforeDraw === afterDraw, 'ничья не меняет следующий раунд');
+  assert(beforeDraw === afterDraw, 'ничья без advance_team_id не меняет следующий раунд');
+
+  // Ничья 1:1 + выбор победителя → сетка двигается
+  resetMatch(73);
+  resetMatch(89);
+  applyMatchResult(73, 1, 1, 'rsa');
+  const r16DrawWin = getMatchTeams(89);
+  assert(r16DrawWin?.home_team_id === 'rsa', 'ничья 1:1 + rsa прошла → rsa в B02 home');
+
+  applyMatchResult(73, 1, 1, 'can');
+  const r16DrawCan = getMatchTeams(89);
+  assert(r16DrawCan?.home_team_id === 'can', 'пересохранение: can прошла после 1:1');
 
   console.log('\n=== Итог ===');
   if (bugs.length === 0) {

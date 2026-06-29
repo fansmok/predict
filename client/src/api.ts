@@ -35,7 +35,7 @@ async function pingOnce(): Promise<boolean> {
 }
 
 /** Проверка сети без авторизации (несколько попыток — VPN иногда медленный). */
-export async function pingServer(attempts = 4): Promise<boolean> {
+export async function pingServer(attempts = 2): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
     if (await pingOnce()) return true;
     if (i < attempts - 1) {
@@ -124,7 +124,12 @@ export const api = {
   getMatch: (id: number) => request<{ match: import('./types').Match }>(`/matches/${id}`),
   getMatchProfile: (id: number) => request<import('./types').MatchProfile>(`/matches/${id}/profile`),
   savePrediction: (matchId: number, homeScore: number, awayScore: number, useDouble?: boolean) =>
-    request<{ success: boolean }>('/predictions', {
+    request<{
+      success: boolean;
+      match: import('./types').Match;
+      doublePicks: Record<string, number>;
+      isNewPrediction: boolean;
+    }>('/predictions', {
       method: 'POST',
       body: JSON.stringify({ matchId, homeScore, awayScore, useDouble }),
     }),
@@ -228,6 +233,7 @@ export const api = {
       awayGoals: Array<{ scorerId: string; assistId?: string | null }>;
       playedPlayerIds: string[];
       sentOffPlayerIds?: string[];
+      advanceTeamId?: string | null;
     }
   ) =>
     request<{ success: boolean; updated?: number; squadStats?: number }>('/admin/match-result', {
@@ -253,6 +259,7 @@ export const api = {
     request<{
       homeScore: number;
       awayScore: number;
+      advanceTeamId: string | null;
       homeGoals: Array<{ scorerId: string; assistId?: string | null }>;
       awayGoals: Array<{ scorerId: string; assistId?: string | null }>;
       playedPlayerIds: string[];

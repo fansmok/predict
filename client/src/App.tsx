@@ -113,14 +113,14 @@ export default function App() {
   const loadUserPicks = useCallback(async (): Promise<boolean> => {
     const gen = ++picksLoadGen.current;
 
-    const tryLoad = async <T,>(fn: () => Promise<T>, attempts = 5): Promise<T | null> => {
+    const tryLoad = async <T,>(fn: () => Promise<T>, attempts = 2): Promise<T | null> => {
       for (let i = 0; i < attempts; i++) {
         try {
           return await fn();
         } catch (e) {
           console.warn('[loadUserPicks] retry', i + 1, e);
           if (i < attempts - 1) {
-            await new Promise<void>(resolve => window.setTimeout(resolve, 800 * (i + 1)));
+            await new Promise<void>(resolve => window.setTimeout(resolve, 500 * (i + 1)));
           }
         }
       }
@@ -264,18 +264,6 @@ export default function App() {
     }
   }, [loadSecondaryData, loadSquadOptions, loadUserPicks]);
 
-  const refreshMatchesAndMe = useCallback(async () => {
-    const [matchesR, meR] = await Promise.allSettled([api.getMatches(), api.getMe()]);
-    if (matchesR.status === 'fulfilled') {
-      setMatches(matchesR.value.matches);
-      setDoublePicks(matchesR.value.doublePicks ?? {});
-    }
-    if (meR.status === 'fulfilled') {
-      setUser(meR.value.user);
-      setStats(meR.value.stats);
-      statsRef.current = meR.value.stats;
-    }
-  }, []);
 
   const bootStarted = useRef(false);
 
@@ -485,8 +473,32 @@ export default function App() {
     awayScore: number,
     useDouble?: boolean
   ) => {
-    await api.savePrediction(matchId, homeScore, awayScore, useDouble);
-    await refreshMatchesAndMe();
+    const result = await api.savePrediction(matchId, homeScore, awayScore, useDouble);
+    setDoublePicks(result.doublePicks);
+    setMatches(prev =>
+      prev.map(m => {
+        const doubleId = result.doublePicks[m.gameDay] ?? null;
+        const updated = {
+          ...m,
+          isDouble: doubleId === m.id,
+          doublePickMatchId: doubleId,
+        };
+        if (m.id !== matchId) return updated;
+        return {
+          ...updated,
+          prediction: result.match.prediction,
+          consensus: result.match.consensus,
+        };
+      })
+    );
+    if (result.isNewPrediction) {
+      setStats(prev => {
+        if (!prev) return prev;
+        const next = { ...prev, totalPredictions: prev.totalPredictions + 1 };
+        statsRef.current = next;
+        return next;
+      });
+    }
   };
 
   const handleSaveTournament = async (picks: {
@@ -514,9 +526,10 @@ export default function App() {
     const data = await api.saveSquad(playerIds);
     setSquad(data);
     if (statsRef.current) {
-      statsRef.current = { ...statsRef.current, hasSquad: data.complete };
+      const next = { ...statsRef.current, hasSquad: data.complete };
+      statsRef.current = next;
+      setStats(next);
     }
-    await refreshMatchesAndMe();
   };
 
   const tournamentComplete = isTournamentComplete(tournament);

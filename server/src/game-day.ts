@@ -4,6 +4,14 @@ export function getGameDay(kickoff: string): string {
   return new Date(kickoff).toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });
 }
 
+/** Границы kickoff (ISO) для календарного дня по Москве — для фильтра в SQL. */
+export function getGameDayKickoffBounds(gameDay: string): { start: string; end: string } {
+  return {
+    start: `${gameDay}T00:00:00+03:00`,
+    end: `${gameDay}T23:59:59.999+03:00`,
+  };
+}
+
 export function isMatchLocked(kickoff: string, status: string): boolean {
   if (status === 'live' || status === 'finished') return true;
   return new Date(kickoff) <= new Date();

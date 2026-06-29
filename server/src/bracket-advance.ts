@@ -1,7 +1,30 @@
 import { db } from './db.js';
 import { MATCHES, TEAMS } from './data/matches.js';
 
-const KNOCKOUT_STAGES = new Set(['r32', 'r16', 'qf', 'sf']);
+export const KNOCKOUT_ADVANCE_STAGES = new Set(['r32', 'r16', 'qf', 'sf']);
+
+export function isKnockoutAdvanceStage(stage: string): boolean {
+  return KNOCKOUT_ADVANCE_STAGES.has(stage);
+}
+
+export function resolveKnockoutOutcome(
+  homeTeamId: string,
+  awayTeamId: string,
+  homeScore: number,
+  awayScore: number,
+  advanceTeamId?: string | null
+): { winner: string; loser: string } | null {
+  if (advanceTeamId) {
+    if (advanceTeamId === homeTeamId) return { winner: homeTeamId, loser: awayTeamId };
+    if (advanceTeamId === awayTeamId) return { winner: awayTeamId, loser: homeTeamId };
+    return null;
+  }
+  if (homeScore === awayScore) return null;
+  return {
+    winner: homeScore > awayScore ? homeTeamId : awayTeamId,
+    loser: homeScore > awayScore ? awayTeamId : homeTeamId,
+  };
+}
 
 /** Слот победителя матча: A03 → br_w_a03, QF1 → br_w_qf1, SF1 → br_w_sf1 */
 export function winnerSlotForGroup(groupName: string | null): string | null {
@@ -33,18 +56,33 @@ function replaceSlotInScheduledMatches(slotTeamId: string, actualTeamId: string)
  * в scheduled-матчи следующих раундов вместо br_w_* / br_l_* слотов.
  */
 export function advanceBracketAfterResult(matchId: number, homeScore: number, awayScore: number): number {
-  if (homeScore === awayScore) return 0;
-
   const row = db
-    .prepare(`SELECT group_name, stage, home_team_id, away_team_id FROM matches WHERE id = ?`)
+    .prepare(`
+      SELECT group_name, stage, home_team_id, away_team_id, advance_team_id
+      FROM matches WHERE id = ?
+    `)
     .get(matchId) as
-    | { group_name: string | null; stage: string; home_team_id: string; away_team_id: string }
+    | {
+        group_name: string | null;
+        stage: string;
+        home_team_id: string;
+        away_team_id: string;
+        advance_team_id: string | null;
+      }
     | undefined;
 
-  if (!row || !KNOCKOUT_STAGES.has(row.stage)) return 0;
+  if (!row || !KNOCKOUT_ADVANCE_STAGES.has(row.stage)) return 0;
 
-  const winner = homeScore > awayScore ? row.home_team_id : row.away_team_id;
-  const loser = homeScore > awayScore ? row.away_team_id : row.home_team_id;
+  const outcome = resolveKnockoutOutcome(
+    row.home_team_id,
+    row.away_team_id,
+    homeScore,
+    awayScore,
+    row.advance_team_id
+  );
+  if (!outcome) return 0;
+
+  const { winner, loser } = outcome;
 
   const winnerSlot = winnerSlotForGroup(row.group_name);
   if (!winnerSlot) return 0;
